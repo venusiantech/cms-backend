@@ -36,11 +36,11 @@ export class PublicController {
 
     console.log(`🔍 Looking up website for: ${domain}`);
 
-    // Remove .local suffix for local testing
-    const cleanDomain = domain.replace('.local', '');
+    // Remove platform suffixes (.local for dev, .jaal.com for production)
+    let cleanDomain = domain.replace('.local', '').replace('.jaal.com', '');
     console.log(`   Cleaned domain: ${cleanDomain}`);
 
-    // First, try to find by subdomain (chocolate-xyz or chocolate-xyz.local)
+    // First, try to find by subdomain (chocolate-xyz)
     let website = await this.prisma.website.findFirst({
       where: { subdomain: cleanDomain },
       include: {
@@ -61,10 +61,19 @@ export class PublicController {
       },
     });
 
-    // If not found, try to find by custom domain (chocolate.com)
+    // If not found, try to find by custom domain
     if (!website) {
       console.log(`   Not found by subdomain, trying custom domain...`);
-      const domainData = await this.domainsService.findByDomainName(cleanDomain);
+      
+      // Try exact match first (e.g., chocolate.com)
+      let domainData = await this.domainsService.findByDomainName(cleanDomain);
+      
+      // If still not found, try with .com extension
+      // (e.g., if looking for "chocolate", try "chocolate.com")
+      if (!domainData && !cleanDomain.includes('.')) {
+        console.log(`   Trying with .com extension...`);
+        domainData = await this.domainsService.findByDomainName(`${cleanDomain}.com`);
+      }
       
       if (domainData && domainData.website) {
         website = await this.prisma.website.findUnique({
@@ -157,7 +166,7 @@ export class PublicController {
     }
 
     // Find website by domain or subdomain
-    const cleanDomain = domain.replace('.local', '');
+    const cleanDomain = domain.replace('.local', '').replace('.jaal.com', '');
     
     let website = await this.prisma.website.findFirst({
       where: { subdomain: cleanDomain },
@@ -165,7 +174,14 @@ export class PublicController {
     });
 
     if (!website) {
-      const domainData = await this.domainsService.findByDomainName(cleanDomain);
+      // Try exact match first
+      let domainData = await this.domainsService.findByDomainName(cleanDomain);
+      
+      // If not found, try with .com extension
+      if (!domainData && !cleanDomain.includes('.')) {
+        domainData = await this.domainsService.findByDomainName(`${cleanDomain}.com`);
+      }
+      
       if (domainData && domainData.website) {
         website = await this.prisma.website.findUnique({
           where: { id: domainData.website.id },
