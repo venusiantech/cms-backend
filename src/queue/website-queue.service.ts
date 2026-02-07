@@ -17,16 +17,17 @@ export class WebsiteQueueService {
 
   async addWebsiteGenerationJob(data: WebsiteGenerationJob): Promise<string> {
     const job = await this.websiteQueue.add('generate-website', data, {
-      attempts: 3,
+      attempts: 2, // Reduced from 3 - AI failures are usually not transient
       backoff: {
         type: 'exponential',
-        delay: 2000,
+        delay: 5000, // Increased from 2s to 5s
       },
+      timeout: 180000, // 3 minute timeout per attempt
       removeOnComplete: false, // Keep completed jobs for status checking
       removeOnFail: false, // Keep failed jobs for debugging
     });
 
-    console.log(`✅ Added job ${job.id} to queue for domain ${data.domainId}`);
+    console.log(`✅ Job ${job.id} queued for domain ${data.domainId} (max 2 attempts)`);
     return job.id.toString();
   }
 
@@ -57,17 +58,18 @@ export class WebsiteQueueService {
     const job = await this.websiteQueue.add('generate-more-blogs', 
       { websiteId, userId },
       {
-        attempts: 3,
+        attempts: 2, // Reduced from 3 - AI failures are usually not transient
         backoff: {
           type: 'exponential',
-          delay: 2000,
+          delay: 5000, // Increased from 2s to 5s
         },
+        timeout: 180000, // 3 minute timeout per attempt
         removeOnComplete: false,
         removeOnFail: false,
       }
     );
 
-    console.log(`✅ Added job ${job.id} to queue for generating more blogs`);
+    console.log(`✅ Job ${job.id} queued for generating more blogs (max 2 attempts)`);
     return job.id.toString();
   }
 }

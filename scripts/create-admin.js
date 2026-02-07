@@ -4,6 +4,9 @@
  * Usage: node scripts/create-admin.js
  */
 
+// Load environment variables
+require('dotenv').config();
+
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 
@@ -15,7 +18,7 @@ async function createAdmin() {
 
   try {
     // Check if admin already exists
-    const existing = await prisma.user.findUnique({
+    const existing = await prisma.users.findUnique({
       where: { email },
     });
 
@@ -25,7 +28,7 @@ async function createAdmin() {
       
       if (existing.role !== 'SUPER_ADMIN') {
         // Update to super admin
-        await prisma.user.update({
+        await prisma.users.update({
           where: { id: existing.id },
           data: { role: 'SUPER_ADMIN' },
         });
@@ -41,11 +44,15 @@ async function createAdmin() {
 
     // Create admin user
     console.log('👤 Creating admin user...');
-    const admin = await prisma.user.create({
+    const { v4: uuidv4 } = require('uuid');
+    const admin = await prisma.users.create({
       data: {
+        id: uuidv4(),
         email,
-        passwordHash,
+        password_hash: passwordHash,
         role: 'SUPER_ADMIN',
+        created_at: new Date(),
+        updated_at: new Date(),
       },
     });
 

@@ -16,6 +16,7 @@ export class WebsiteProcessor {
     const { domainId, templateKey, contactFormEnabled } = job.data;
 
     console.log(`\n🚀 Starting website generation job ${job.id} for domain ${domainId}`);
+    console.log(`   Attempt: ${job.attemptsMade + 1}/${job.opts.attempts || 1}`);
     
     try {
       // Update job progress
@@ -27,19 +28,29 @@ export class WebsiteProcessor {
       });
 
       if (!domain) {
+        // Non-retryable error - domain doesn't exist
+        job.opts.attempts = 1; // Don't retry
         throw new Error('Domain not found');
       }
 
       await job.progress(20);
 
-      // Check if website already exists for this domain
+      // IDEMPOTENCY CHECK: Check if website already exists for this domain
       const existingWebsite = await this.prisma.website.findUnique({
         where: { domainId },
       });
 
       if (existingWebsite) {
-        console.log(`⚠️  Website already exists for domain ${domain.domainName}`);
-        throw new Error('Website already exists for this domain. Delete the existing website first.');
+        console.log(`✅ Website already exists for domain ${domain.domainName} (idempotent completion)`);
+        
+        // Return existing website as successful completion (idempotent)
+        return {
+          success: true,
+          websiteId: existingWebsite.id,
+          subdomain: existingWebsite.subdomain,
+          message: 'Website already generated (idempotent)',
+          alreadyExisted: true,
+        };
       }
 
       // Generate subdomain
@@ -95,7 +106,30 @@ export class WebsiteProcessor {
         message: 'Website generated successfully',
       };
     } catch (error) {
-      console.error(`❌ Error in job ${job.id}:`, error);
+      console.error(`❌ Error in job ${job.id} (attempt ${job.attemptsMade + 1}):`, error.message);
+      
+      // Cleanup partially created website on final failure
+      if (job.attemptsMade + 1 >= (job.opts.attempts || 1)) {
+        console.log(`🧹 Final attempt failed - cleaning up partial data for domain ${domainId}...`);
+        
+        try {
+          // Delete website if it was partially created (cascade will delete pages/sections/blocks)
+          await this.prisma.website.deleteMany({
+            where: { domainId },
+          });
+          
+          // Reset domain status to PENDING
+          await this.prisma.domain.update({
+            where: { id: domainId },
+            data: { status: 'PENDING' },
+          });
+          
+          console.log(`✅ Cleanup completed for domain ${domainId}`);
+        } catch (cleanupError) {
+          console.error(`⚠️  Cleanup failed:`, cleanupError.message);
+        }
+      }
+      
       throw error;
     }
   }
