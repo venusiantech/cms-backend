@@ -1,0 +1,215 @@
+// Prisma Schema for Multi-Tenant Domain CMS Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// 1️⃣ USERS TABLE
+// ============================================
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String   @map("password_hash")
+  role          UserRole @default(USER)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  domains             Domain[]
+  regenerationLogs    RegenerationLog[]
+  
+  @@map("users")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  USER
+}
+
+// ============================================
+// 2️⃣ DOMAINS TABLE
+// ============================================
+model Domain {
+  id               String       @id @default(uuid())
+  userId           String       @map("user_id")
+  domainName       String       @unique @map("domain_name")
+  status           DomainStatus @default(PENDING)
+  selectedMeaning  String?      @map("selected_meaning") @db.Text // Stores user's selected meaning/context
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+  
+  // Relations
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  website Website?
+  
+  @@index([userId])
+  @@index([domainName])
+  @@map("domains")
+}
+
+enum DomainStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+// ============================================
+// 3️⃣ WEBSITES TABLE
+// ============================================
+model Website {
+  id                 String   @id @default(uuid())
+  domainId           String   @unique @map("domain_id")
+  subdomain          String   @default("") // Auto-generated: chocolate.yourdomain.com
+  templateKey        String   @map("template_key") // templateA, templateB, etc.
+  adsEnabled         Boolean  @default(false) @map("ads_enabled")
+  adsApproved        Boolean  @default(false) @map("ads_approved")
+  contactFormEnabled Boolean  @default(true) @map("contact_form_enabled") // Toggle for contact form visibility
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  pages  Page[]
+  leads  Lead[]
+  
+  @@index([domainId])
+  @@index([subdomain])
+  @@map("websites")
+}
+
+// ============================================
+// 4️⃣ PAGES TABLE
+// ============================================
+model Page {
+  id             String  @id @default(uuid())
+  websiteId      String  @map("website_id")
+  slug           String  // "/", "/about", "/contact"
+  seoTitle       String? @map("seo_title")
+  seoDescription String? @map("seo_description") @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  website  Website   @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  sections Section[]
+  
+  @@unique([websiteId, slug])
+  @@index([websiteId])
+  @@map("pages")
+}
+
+// ============================================
+// 5️⃣ SECTIONS TABLE
+// ============================================
+model Section {
+  id          String   @id @default(uuid())
+  pageId      String   @map("page_id")
+  sectionType String   @map("section_type") // hero, content, features, footer, etc.
+  orderIndex  Int      @map("order_index")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  page          Page           @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  contentBlocks ContentBlock[]
+  
+  @@index([pageId])
+  @@map("sections")
+}
+
+// ============================================
+// 6️⃣ CONTENT BLOCKS TABLE
+// ============================================
+model ContentBlock {
+  id              String   @id @default(uuid())
+  sectionId       String   @map("section_id")
+  blockType       String   @map("block_type") // text, image, video, etc.
+  contentJson     String   @map("content_json") @db.Text // Stores JSON data
+  aiPromptId      String?  @map("ai_prompt_id")
+  lastGeneratedAt DateTime? @map("last_generated_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  section          Section           @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  aiPrompt         AiPrompt?         @relation(fields: [aiPromptId], references: [id], onDelete: SetNull)
+  regenerationLogs RegenerationLog[]
+  
+  @@index([sectionId])
+  @@index([aiPromptId])
+  @@map("content_blocks")
+}
+
+// ============================================
+// 7️⃣ AI PROMPTS TABLE
+// ============================================
+model AiPrompt {
+  id          String       @id @default(uuid())
+  promptKey   String       @unique @map("prompt_key") // e.g., "hero_heading_templateA"
+  promptText  String       @map("prompt_text") @db.Text
+  promptType  PromptType   @map("prompt_type")
+  templateKey String       @map("template_key") // Which template this applies to
+  createdBy   String       @map("created_by") // SUPER_ADMIN user ID
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  
+  // Relations
+  contentBlocks ContentBlock[]
+  
+  @@index([templateKey])
+  @@index([promptKey])
+  @@map("ai_prompts")
+}
+
+enum PromptType {
+  TEXT
+  IMAGE
+  SEO
+}
+
+// ============================================
+// 8️⃣ LEADS TABLE
+// ============================================
+model Lead {
+  id        String   @id @default(uuid())
+  websiteId String   @map("website_id")
+  name      String
+  company   String?
+  email     String
+  message   String   @db.Text
+  leadType  String   @default("CONTACT") @map("lead_type") // CONTACT, ADS_INQUIRY
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  website Website @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  
+  @@index([websiteId])
+  @@index([createdAt])
+  @@map("leads")
+}
+
+// ============================================
+// 9️⃣ REGENERATION LOGS TABLE
+// ============================================
+model RegenerationLog {
+  id             String   @id @default(uuid())
+  contentBlockId String   @map("content_block_id")
+  userId         String   @map("user_id")
+  generatedAt    DateTime @default(now()) @map("generated_at")
+  
+  // Relations
+  contentBlock ContentBlock @relation(fields: [contentBlockId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([contentBlockId])
+  @@index([userId])
+  @@map("regeneration_logs")
+}
+
