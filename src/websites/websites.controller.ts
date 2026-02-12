@@ -1,7 +1,7 @@
 import { Controller, Post, Put, Body, Param, UseGuards, Get } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { WebsitesService } from './websites.service';
-import { GenerateWebsiteDto, UpdateAdsDto, UpdateContactFormDto, UpdateTemplateDto } from './dto/website.dto';
+import { GenerateWebsiteDto, UpdateAdsDto, UpdateContactFormDto, UpdateTemplateDto, UpdateWebsiteMetadataDto } from './dto/website.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { WebsiteQueueService } from '../queue/website-queue.service';
@@ -86,6 +86,16 @@ export class WebsitesController {
     @Body() dto: UpdateTemplateDto,
   ) {
     return this.websitesService.updateTemplate(id, user.id, user.role, dto);
+  }
+
+  @Put(':id/metadata')
+  @ApiOperation({ summary: 'Update website metadata (title, description, image for social sharing)' })
+  updateMetadata(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() dto: UpdateWebsiteMetadataDto,
+  ) {
+    return this.websitesService.updateMetadata(id, user.id, user.role, dto);
   }
 }
 

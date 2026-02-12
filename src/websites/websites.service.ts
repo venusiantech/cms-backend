@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiService } from '../ai-service/ai.service';
-import { GenerateWebsiteDto, UpdateAdsDto, UpdateContactFormDto, UpdateTemplateDto } from './dto/website.dto';
+import { GenerateWebsiteDto, UpdateAdsDto, UpdateContactFormDto, UpdateTemplateDto, UpdateWebsiteMetadataDto } from './dto/website.dto';
 import { getAvailableTemplates, isValidTemplate } from './templates.constant';
 
 @Injectable()
@@ -875,6 +875,45 @@ export class WebsitesService {
     });
 
     console.log(`🎉 Template updated successfully!`);
+    return updatedWebsite;
+  }
+
+  /**
+   * Update website metadata (title, description, image for social sharing)
+   */
+  async updateMetadata(websiteId: string, userId: string, userRole: string, dto: UpdateWebsiteMetadataDto) {
+    console.log(`\n📝 === UPDATE WEBSITE METADATA ===`);
+    console.log(`Website ID: ${websiteId}`);
+    console.log(`Meta Title: ${dto.metaTitle}`);
+    console.log(`Meta Description: ${dto.metaDescription}`);
+    console.log(`Meta Image: ${dto.metaImage}`);
+
+    const website = await this.prisma.website.findUnique({
+      where: { id: websiteId },
+      include: { domain: true },
+    });
+
+    if (!website) {
+      throw new NotFoundException('Website not found');
+    }
+
+    // Check ownership
+    if (userRole !== 'SUPER_ADMIN' && website.domain.userId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    console.log(`✅ Updating metadata for website: ${website.id}`);
+
+    const updatedWebsite = await this.prisma.website.update({
+      where: { id: websiteId },
+      data: {
+        metaTitle: dto.metaTitle !== undefined ? dto.metaTitle : website.metaTitle,
+        metaDescription: dto.metaDescription !== undefined ? dto.metaDescription : website.metaDescription,
+        metaImage: dto.metaImage !== undefined ? dto.metaImage : website.metaImage,
+      },
+    });
+
+    console.log(`🎉 Metadata updated successfully!`);
     return updatedWebsite;
   }
 

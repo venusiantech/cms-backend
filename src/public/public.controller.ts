@@ -121,6 +121,9 @@ export class PublicController {
         adsEnabled: website.adsEnabled,
         adsApproved: website.adsApproved,
         contactFormEnabled: website.contactFormEnabled,
+        metaTitle: website.metaTitle,
+        metaDescription: website.metaDescription,
+        metaImage: website.metaImage,
       },
       pages: website.pages.map(page => ({
         id: page.id,
