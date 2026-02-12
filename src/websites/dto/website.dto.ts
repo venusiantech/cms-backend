@@ -68,4 +68,3 @@ export class UpdateWebsiteMetadataDto {
   @IsOptional()
   metaImage?: string;
 }
-
