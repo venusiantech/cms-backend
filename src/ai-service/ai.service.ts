@@ -1,35 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
+import { AppError } from '../middleware/error.middleware';
 
-interface AaddyyArticleResponse {
-  success: boolean;
-  data?: any; // Flexible to handle both formats
-  error?: any; // Error object when success is false
-}
-
-interface AaddyyTitleResponse {
-  success: boolean;
-  data?: any; // Flexible to handle both formats
-  error?: any; // Error object when success is false
-}
-
-interface AaddyyImageResponse {
-  success: boolean;
-  data?: any; // Flexible to handle both formats
-  error?: any; // Error object when success is false
-}
-
-/**
- * AI Service - Integrates with Aaddyy AI Services
- * 
- * Services:
- * - Title Generation (generate blog titles)
- * - Research Blog Writer (full blog posts with research)
- * - Image Generation (AI images)
- */
-@Injectable()
 export class AiService {
-  private readonly logger = new Logger(AiService.name);
   private readonly apiKey: string;
   private readonly apiUrl: string;
 
@@ -42,153 +14,47 @@ export class AiService {
     console.log(`🔑 API Key: ${this.apiKey ? '****' + this.apiKey.slice(-4) : 'NOT SET'}`);
     
     if (!this.apiKey) {
-      this.logger.error('❌ AADDYY_API_KEY is required but not set!');
-      console.log('💡 Add AADDYY_API_KEY to backend/.env to use AI generation');
-      console.log('⚠️  Website generation will fail without API key');
+      console.warn('⚠️  AADDYY_API_KEY not set - AI features will fail');
     } else {
-      this.logger.log('✅ Aaddyy AI Service initialized with real API');
+      console.log('✅ Aaddyy AI Service initialized');
     }
     console.log('==========================================\n');
   }
 
   /**
-   * Generate blog content using Aaddyy Research Blog Writer
-   * @param topic - The blog topic/title
+   * Generate article titles using AI
    */
-  async generateBlog(topic: string): Promise<string> {
-    console.log(`\n📝 === GENERATE BLOG ===`);
-    console.log(`Topic: ${topic}`);
-    
-    // Validation: Ensure topic is valid
-    if (!topic || typeof topic !== 'string' || topic.trim().length === 0) {
-      const error = 'Invalid topic: Topic must be a non-empty string';
-      this.logger.error(`❌ ${error}`);
-      throw new Error(error);
-    }
-
-    // Validation: Detect if topic looks like an error message
-    if (topic.toLowerCase().includes('error') || 
-        topic.toLowerCase().includes('failed') ||
-        topic.toLowerCase().includes('apologies') ||
-        topic.toLowerCase().includes('cannot') ||
-        topic.length > 500) {
-      const error = `Invalid topic: Topic appears to be an error message or too long (${topic.length} chars)`;
-      this.logger.error(`❌ ${error}`);
-      this.logger.error(`Topic preview: ${topic.substring(0, 100)}...`);
-      throw new Error(error);
-    }
-    
-    if (!this.apiKey) {
-      const error = 'AADDYY_API_KEY is not configured. Cannot generate content.';
-      this.logger.error(`❌ ${error}`);
-      throw new Error(error);
-    }
-
-    console.log(`Calling: POST ${this.apiUrl}/api/ai/research-blog-writer`);
-    this.logger.log(`🤖 Generating blog with Aaddyy: ${topic.substring(0, 50)}...`);
-
-    try {
-      const response = await axios.post<AaddyyArticleResponse>(
-        `${this.apiUrl}/api/ai/research-blog-writer`,
-        {
-          topic: topic,
-          includeResearch: true,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 120000, // 2 minute timeout
-        }
-      );
-
-      if (response.data.success) {
-        console.log(`✅ Aaddyy API Success!`);
-        
-        const content = response.data.data.content;
-        
-        if (!content) {
-          console.log(`⚠️  Content field is undefined or empty`);
-          throw new Error('Content field is missing from API response');
-        }
-        
-        console.log(`   Article Type: ${response.data.data.articleType || 'N/A'}`);
-        console.log(`   Processing Time: ${response.data.data.processingTime}ms`);
-        console.log(`   URLs Processed: ${response.data.data.serviceInfo?.urlsProcessed || 0}`);
-        console.log(`   Cost: $${response.data.data.cost}`);
-        console.log(`   Remaining Credits: $${response.data.data.remainingCredits}`);
-        console.log(`   Content Length: ${content.length} characters`);
-        
-        this.logger.log(`✅ Blog generated ($${response.data.data.cost}, ${response.data.data.serviceInfo?.urlsProcessed || 0} sources)`);
-        return content;
-      } else {
-        const errorMsg = response.data.error || 'API returned success: false';
-        this.logger.error(`❌ Blog generation failed: ${JSON.stringify(errorMsg)}`);
-        throw new Error(`Blog generation failed: ${JSON.stringify(errorMsg)}`);
-      }
-    } catch (error) {
-      if (error.response) {
-        // AI API returned an error response
-        const status = error.response.status;
-        const errorData = error.response.data?.error || error.response.data;
-        this.logger.error(`❌ AI API Error (${status}): ${JSON.stringify(errorData)}`);
-        throw new Error(`AI API Error (${status}): ${JSON.stringify(errorData)}`);
-      } else if (error.request) {
-        // Request made but no response
-        this.logger.error(`❌ No response from AI API: ${error.message}`);
-        throw new Error(`No response from AI API (timeout or network error): ${error.message}`);
-      } else if (error.message.includes('Invalid topic')) {
-        // Re-throw validation errors as-is
-        throw error;
-      } else {
-        // Other errors
-        this.logger.error(`❌ Blog generation error: ${error.message}`);
-        throw new Error(`Blog generation error: ${error.message}`);
-      }
-    }
-  }
-
-  /**
-   * Generate multiple titles using Aaddyy Title Generator
-   * @param prompt - The prompt/topic
-   * @param quantity - Number of titles to generate
-   */
-  async generateTitles(prompt: string, quantity: number = 3): Promise<string[]> {
+  async generateTitle(topic: string, quantity: number = 1): Promise<string[]> {
     console.log(`\n🔤 === GENERATE TITLES ===`);
-    console.log(`Prompt: ${prompt}`);
+    console.log(`Topic: ${topic}`);
     console.log(`Quantity: ${quantity}`);
-    
-    // Validation: Ensure prompt is valid
-    if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
-      const error = 'Invalid prompt: Prompt must be a non-empty string';
-      this.logger.error(`❌ ${error}`);
-      throw new Error(error);
+
+    // Validation
+    if (!topic || typeof topic !== 'string' || topic.trim().length === 0) {
+      throw new AppError('Invalid topic: Topic must be a non-empty string', 400);
     }
 
-    // Validation: Check prompt length
-    if (prompt.length > 200) {
-      const error = `Invalid prompt: Prompt too long (${prompt.length} chars, max 200)`;
-      this.logger.error(`❌ ${error}`);
-      throw new Error(error);
+    if (topic.length > 200) {
+      throw new AppError(`Invalid topic: Topic too long (${topic.length} chars, max 200)`, 400);
     }
-    
+
     if (!this.apiKey) {
-      const error = 'AADDYY_API_KEY is not configured. Cannot generate titles.';
-      this.logger.error(`❌ ${error}`);
-      throw new Error(error);
+      throw new AppError('AADDYY_API_KEY is not configured. Cannot generate titles.', 500);
     }
 
     console.log(`Calling: POST ${this.apiUrl}/api/ai/article-title`);
-    this.logger.log(`📝 Generating ${quantity} titles with Aaddyy...`);
 
     try {
-      const response = await axios.post<AaddyyTitleResponse>(
+      const response = await axios.post(
         `${this.apiUrl}/api/ai/article-title`,
         {
-          topic: prompt,
+          topic,
           tone: 'professional',
-          quantity: quantity,
+          quantity,
+          audience: 'general',
+          keywords: topic,
+          maxLength: 100,
+          includeNumbers: false,
         },
         {
           headers: {
@@ -199,216 +65,363 @@ export class AiService {
         }
       );
 
+      // Check if API returned success
       if (response.data.success) {
         console.log(`✅ Aaddyy API Success!`);
-        console.log(`   Cost: $${response.data.data.cost}`);
-        console.log(`   Remaining Credits: $${response.data.data.remainingCredits}`);
-        
-        const titles = response.data.data.titles;
-        
+        console.log(`   Cost: $${response.data.data?.cost || 0}`);
+        console.log(`   Remaining Credits: $${response.data.data?.remainingCredits || 0}`);
+
+        const titles = response.data.data?.titles;
+
         if (!titles || !Array.isArray(titles) || titles.length === 0) {
           console.log(`❌ No titles found in response`);
-          throw new Error('No titles returned from API');
+          throw new AppError('No titles returned from API', 500);
         }
-        
-        console.log(`   Generated ${titles.length} titles`);
+
+        console.log(`   Generated ${titles.length} titles:`);
         titles.forEach((t: string, i: number) => {
           console.log(`   ${i + 1}. ${t.substring(0, 80)}...`);
         });
-        
-        this.logger.log(`✅ ${titles.length} titles generated ($${response.data.data.cost})`);
+
         return titles;
       } else {
         const errorMsg = response.data.error || 'API returned success: false';
-        this.logger.error(`❌ Title generation failed: ${JSON.stringify(errorMsg)}`);
-        throw new Error(`Title generation failed: ${JSON.stringify(errorMsg)}`);
+        console.error(`❌ Title generation failed: ${JSON.stringify(errorMsg)}`);
+        throw new AppError(`Title generation failed: ${JSON.stringify(errorMsg)}`, 500);
       }
-    } catch (error) {
+    } catch (error: any) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+
       if (error.response) {
         const status = error.response.status;
         const errorData = error.response.data?.error || error.response.data;
-        this.logger.error(`❌ AI API Error (${status}): ${JSON.stringify(errorData)}`);
-        throw new Error(`AI API Error (${status}): ${JSON.stringify(errorData)}`);
+        console.error(`❌ AI API Error (${status}): ${JSON.stringify(errorData)}`);
+        throw new AppError(`AI API Error (${status}): ${JSON.stringify(errorData)}`, status);
       } else if (error.request) {
-        this.logger.error(`❌ No response from AI API: ${error.message}`);
-        throw new Error(`No response from AI API (timeout or network error): ${error.message}`);
-      } else if (error.message.includes('Invalid')) {
-        throw error;
+        console.error(`❌ No response from AI API: ${error.message}`);
+        throw new AppError(`No response from AI API (timeout or network error): ${error.message}`, 500);
       } else {
-        this.logger.error(`❌ Title generation error: ${error.message}`);
-        throw new Error(`Title generation error: ${error.message}`);
+        console.error(`❌ Title generation error: ${error.message}`);
+        throw new AppError(`Title generation error: ${error.message}`, 500);
       }
     }
   }
 
   /**
-   * Generate single title/heading using Aaddyy Title Generator
-   * @param prompt - The prompt from database
+   * Generate blog content using research-blog-writer
    */
-  async generateTitle(prompt: string): Promise<string> {
-    const titles = await this.generateTitles(prompt, 1);
-    return titles[0];
+  async generateBlogContent(title: string): Promise<string> {
+    console.log(`\n📝 === GENERATE BLOG ===`);
+    console.log(`Topic: ${title}`);
+
+    // Validation
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+      throw new AppError('Invalid topic: Topic must be a non-empty string', 400);
+    }
+
+    if (title.length > 500) {
+      throw new AppError(`Invalid topic: Topic too long (${title.length} chars, max 500)`, 400);
+    }
+
+    // Detect if topic looks like an error message or placeholder
+    const lowerTitle = title.toLowerCase();
+    if (
+      (lowerTitle.includes('apologies') && lowerTitle.includes('confusion')) ||
+      (lowerTitle.includes('placeholder') && lowerTitle.includes('{{')) ||
+      (lowerTitle.includes('provide') && lowerTitle.includes('details')) ||
+      lowerTitle.includes('target audience:') ||
+      lowerTitle.includes('- keywords:') ||
+      title.length > 500
+    ) {
+      throw new AppError('Invalid topic: Topic appears to be an error message or placeholder request', 400);
+    }
+
+    if (!this.apiKey) {
+      throw new AppError('AADDYY_API_KEY is not configured. Cannot generate content.', 500);
+    }
+
+    console.log(`Calling: POST ${this.apiUrl}/api/ai/research-blog-writer`);
+
+    try {
+      const response = await axios.post(
+        `${this.apiUrl}/api/ai/research-blog-writer`,
+        {
+          topic: title,
+          includeResearch: true,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 120000, // 2 minutes timeout
+        }
+      );
+
+      // Check if API returned success
+      if (response.data.success) {
+        console.log(`✅ Aaddyy API Success!`);
+
+        const content = response.data.data?.content;
+
+        if (!content) {
+          console.log(`⚠️  Content field is undefined or empty`);
+          throw new AppError('Content field is missing from API response', 500);
+        }
+
+        console.log(`   Article Type: ${response.data.data?.articleType || 'N/A'}`);
+        console.log(`   Processing Time: ${response.data.data?.processingTime}ms`);
+        console.log(`   URLs Processed: ${response.data.data?.serviceInfo?.urlsProcessed || 0}`);
+        console.log(`   Cost: $${response.data.data?.cost || 0}`);
+        console.log(`   Remaining Credits: $${response.data.data?.remainingCredits || 0}`);
+        console.log(`   Content Length: ${content.length} characters`);
+
+        return content;
+      } else {
+        const errorMsg = response.data.error || 'API returned success: false';
+        console.error(`❌ Blog generation failed: ${JSON.stringify(errorMsg)}`);
+        throw new AppError(`Blog generation failed: ${JSON.stringify(errorMsg)}`, 500);
+      }
+    } catch (error: any) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+
+      if (error.response) {
+        const status = error.response.status;
+        const errorData = error.response.data?.error || error.response.data;
+        console.error(`❌ AI API Error (${status}): ${JSON.stringify(errorData)}`);
+        throw new AppError(`AI API Error (${status}): ${JSON.stringify(errorData)}`, status);
+      } else if (error.request) {
+        console.error(`❌ No response from AI API: ${error.message}`);
+        throw new AppError(`No response from AI API (timeout or network error): ${error.message}`, 500);
+      } else {
+        console.error(`❌ Blog generation error: ${error.message}`);
+        throw new AppError(`Blog generation error: ${error.message}`, 500);
+      }
+    }
   }
 
   /**
-   * Generate image using Aaddyy Image Generator
-   * @param prompt - The image prompt from database
+   * Generate image using AI
    */
-  async generateImage(prompt: string): Promise<string> {
+  async generateImage(prompt: string, size: string = '1024x1024'): Promise<string> {
     console.log(`\n🎨 === GENERATE IMAGE ===`);
     console.log(`Prompt: ${prompt.substring(0, 100)}...`);
-    
+
     if (!this.apiKey) {
-      const error = 'AADDYY_API_KEY is not configured. Cannot generate image.';
-      this.logger.error(`❌ ${error}`);
-      throw new Error(error);
+      throw new AppError('AADDYY_API_KEY is not configured. Cannot generate image.', 500);
     }
 
     console.log(`Calling: POST ${this.apiUrl}/api/ai/image-generation`);
-    this.logger.log(`🎨 Generating image with Aaddyy: ${prompt.substring(0, 50)}...`);
 
-    const response = await axios.post<AaddyyImageResponse>(
-      `${this.apiUrl}/api/ai/image-generation`,
-      {
-        prompt: prompt,
-        size: '1024x1024',
-        num_images: 1,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
+    try {
+      const response = await axios.post(
+        `${this.apiUrl}/api/ai/image-generation`,
+        {
+          prompt,
+          size,
+          num_images: 1,
         },
-      }
-    );
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 60000, // 1 minute timeout
+        }
+      );
 
-    if (response.data.success) {
-      console.log(`✅ Aaddyy API Success!`);
-      console.log(`   Cost: $${response.data.data.cost}`);
-      console.log(`   Remaining Credits: $${response.data.data.remainingCredits}`);
-      
-      let imageUrl: string | null = null;
-      
-      // Try standard format
-      if (response.data.data.images && response.data.data.images.length > 0) {
-        imageUrl = response.data.data.images[0].url;
-        console.log(`   Using images[0].url format`);
+      // Check if API returned success
+      if (response.data.success) {
+        console.log(`✅ Aaddyy API Success!`);
+        console.log(`   Cost: $${response.data.data?.cost || 0}`);
+        console.log(`   Remaining Credits: $${response.data.data?.remainingCredits || 0}`);
+
+        let imageUrl: string | null = null;
+
+        // Debug: Log the entire response structure
+        console.log(`   Response data keys:`, Object.keys(response.data.data || {}));
+        if (response.data.data?.images) {
+          console.log(`   Images array length:`, response.data.data.images.length);
+        }
+
+        // Try images array format (standard format)
+        if (response.data.data?.images && response.data.data.images.length > 0) {
+          imageUrl = response.data.data.images[0].url;
+          console.log(`   ✅ Using images[0].url format`);
+        }
+
+        // Fallback to direct url field
+        if (!imageUrl && response.data.data?.url) {
+          imageUrl = response.data.data.url;
+          console.log(`   ✅ Using direct url format`);
+        }
+
+        if (!imageUrl) {
+          console.log(`❌ Image URL not found in response`);
+          console.log(`   Full response.data.data:`, JSON.stringify(response.data.data, null, 2));
+          throw new AppError('Image URL is missing from API response', 500);
+        }
+
+        console.log(`   Image URL: ${imageUrl.substring(0, 80)}...`);
+        return imageUrl;
+      } else {
+        const errorMsg = response.data.error || 'API returned success: false';
+        console.error(`❌ Image generation failed: ${JSON.stringify(errorMsg)}`);
+        throw new AppError(`Image generation failed: ${JSON.stringify(errorMsg)}`, 500);
       }
-      
-      if (!imageUrl) {
-        console.log(`❌ Image URL not found in response`);
-        console.log(`   Response:`, response.data.data);
-        throw new Error('Image URL is missing from API response');
+    } catch (error: any) {
+      if (error instanceof AppError) {
+        throw error;
       }
-      
-      console.log(`   Image URL: ${imageUrl ? imageUrl.substring(0, 80) : 'N/A'}...`);
-      this.logger.log(`✅ Image generated ($${response.data.data.cost})`);
-      return imageUrl;
-    } else {
-      this.logger.error('❌ Image generation failed - API returned success: false');
-      throw new Error('Image generation failed - API returned unsuccessful response');
+
+      if (error.response) {
+        const status = error.response.status;
+        const errorData = error.response.data?.error || error.response.data;
+        console.error(`❌ AI API Error (${status}): ${JSON.stringify(errorData)}`);
+        throw new AppError(`AI API Error (${status}): ${JSON.stringify(errorData)}`, status);
+      } else if (error.request) {
+        console.error(`❌ No response from AI API: ${error.message}`);
+        throw new AppError(`No response from AI API (timeout or network error): ${error.message}`, 500);
+      } else {
+        console.error(`❌ Image generation error: ${error.message}`);
+        throw new AppError(`Image generation error: ${error.message}`, 500);
+      }
     }
   }
 
   /**
-   * Generate SEO metadata using AI
-   * @param prompt - The SEO prompt from database
+   * Find synonyms for a word
    */
-  async generateSEO(prompt: string): Promise<{ title: string; description: string }> {
-    console.log(`\n🔍 === GENERATE SEO ===`);
-    console.log(`Prompt: ${prompt.substring(0, 100)}...`);
-    
-    if (!this.apiKey) {
-      const error = 'AADDYY_API_KEY is not configured. Cannot generate SEO.';
-      this.logger.error(`❌ ${error}`);
-      throw new Error(error);
-    }
-    
-    // Use title generator for SEO title
-    const title = await this.generateTitle(prompt);
-    
-    // Use article generator for meta description
-    console.log(`Generating meta description with Aaddyy...`);
-    const response = await axios.post<AaddyyArticleResponse>(
-      `${this.apiUrl}/api/ai/article`,
-      {
-        topic: `Write a compelling meta description for: ${prompt}`,
-        length: 'short',
-        tone: 'professional',
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-
-    if (response.data.success) {
-      // Extract first 160 characters for meta description
-      const description = response.data.data.article.substring(0, 160).trim();
-      console.log(`✅ Meta description generated`);
-      this.logger.log('🔍 SEO metadata generated');
-      return { title, description };
-    } else {
-      throw new Error('SEO description generation failed');
-    }
-  }
-
-  /**
-   * Find synonyms and multiple meanings for a word
-   * @param topic - The word/domain to find meanings for
-   * @param similarWordsCount - Number of similar words/synonyms to find for each meaning
-   * @returns Object with meaning as key and example sentence as value
-   */
-  async findSynonyms(topic: string, similarWordsCount: number = 5): Promise<Record<string, string>> {
+  async findSynonyms(word: string, count: number = 5): Promise<Record<string, string>> {
     console.log(`\n🔍 === FIND SYNONYMS ===`);
-    console.log(`Topic: ${topic}`);
-    console.log(`Similar Words Count: ${similarWordsCount}`);
-    
+    console.log(`Topic: ${word}`);
+    console.log(`Similar Words Count: ${count}`);
+
     if (!this.apiKey) {
-      const error = 'AADDYY_API_KEY is not configured. Cannot find synonyms.';
-      this.logger.error(`❌ ${error}`);
-      throw new Error(error);
+      console.warn('⚠️  AADDYY_API_KEY not set - returning empty synonyms');
+      return {};
     }
 
     console.log(`Calling: POST ${this.apiUrl}/api/ai/synonym-finder`);
-    this.logger.log(`🔍 Finding synonyms with Aaddyy: ${topic}`);
 
-    const response = await axios.post(
-      `${this.apiUrl}/api/ai/synonym-finder`,
-      {
-        topic: topic,
-        similarWordsCount: similarWordsCount,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
+    try {
+      const response = await axios.post(
+        `${this.apiUrl}/api/ai/synonym-finder`,
+        {
+          topic: word,
+          similarWordsCount: count,
         },
-      }
-    );
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
-    if (response.data.success) {
-      console.log(`✅ Aaddyy API Success!`);
-      console.log(`   Cost: $${response.data.data.cost}`);
-      console.log(`   Remaining Credits: $${response.data.data.remainingCredits}`);
-      
-      // API returns "synonyms" not "meanings"
-      const synonyms = response.data.data.synonyms || {};
-      const meaningCount = Object.keys(synonyms).length;
-      
-      console.log(`   Found ${meaningCount} different meanings:`);
-      Object.entries(synonyms).forEach(([meaning, exampleSentence]: [string, any]) => {
-        console.log(`   - ${meaning}: ${exampleSentence}`);
+      if (response.data.success) {
+        console.log(`✅ Aaddyy API Success!`);
+        console.log(`   Cost: $${response.data.data?.cost || 0}`);
+        console.log(`   Remaining Credits: $${response.data.data?.remainingCredits || 0}`);
+
+        // API returns "synonyms" object with meaning as key and example sentence as value
+        const synonyms = response.data.data?.synonyms || {};
+        const meaningCount = Object.keys(synonyms).length;
+
+        console.log(`   Found ${meaningCount} different meanings:`);
+        Object.entries(synonyms).forEach(([meaning, exampleSentence]: [string, any]) => {
+          console.log(`   - ${meaning}: ${exampleSentence}`);
+        });
+
+        return synonyms;
+      } else {
+        console.error('❌ Synonym finder failed - API returned success: false');
+        return {};
+      }
+    } catch (error: any) {
+      console.error('❌ Synonym lookup failed:', error.response?.data || error.message);
+      // Return empty object if API fails (non-critical feature)
+      return {};
+    }
+  }
+
+  /**
+   * Generate content based on custom prompt from database
+   */
+  async generateWithPrompt(prompt: string, context?: Record<string, any>): Promise<string> {
+    // Replace placeholders in prompt with context values
+    let processedPrompt = prompt;
+    if (context) {
+      Object.keys(context).forEach((key) => {
+        const placeholder = `{${key}}`;
+        processedPrompt = processedPrompt.replace(
+          new RegExp(placeholder, 'g'),
+          context[key]
+        );
       });
-      
-      this.logger.log(`✅ Found ${meaningCount} meanings ($${response.data.data.cost})`);
-      return synonyms;
-    } else {
-      this.logger.error('❌ Synonym finder failed - API returned success: false');
-      throw new Error('Synonym finder failed - API returned unsuccessful response');
+    }
+
+    console.log(`\n🎯 === GENERATE WITH CUSTOM PROMPT ===`);
+    console.log(`Prompt: ${processedPrompt.substring(0, 50)}...`);
+
+    if (!this.apiKey) {
+      throw new AppError('AADDYY_API_KEY is not configured', 500);
+    }
+
+    console.log(`Calling: POST ${this.apiUrl}/api/ai/research-blog-writer`);
+
+    try {
+      const response = await axios.post(
+        `${this.apiUrl}/api/ai/research-blog-writer`,
+        {
+          topic: processedPrompt,
+          includeResearch: true,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 120000,
+        }
+      );
+
+      // Check if API returned success
+      if (response.data.success) {
+        const content = response.data.data?.content;
+
+        if (!content) {
+          throw new AppError('Content field is missing from API response', 500);
+        }
+
+        console.log(`✅ Generated content (${content.length} characters)`);
+        return content;
+      } else {
+        const errorMsg = response.data.error || 'API returned success: false';
+        console.error(`❌ Custom prompt generation failed: ${JSON.stringify(errorMsg)}`);
+        throw new AppError(`Custom prompt generation failed: ${JSON.stringify(errorMsg)}`, 500);
+      }
+    } catch (error: any) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+
+      if (error.response) {
+        const status = error.response.status;
+        const errorData = error.response.data?.error || error.response.data;
+        console.error(`❌ AI API Error (${status}): ${JSON.stringify(errorData)}`);
+        throw new AppError(`AI API Error (${status}): ${JSON.stringify(errorData)}`, status);
+      } else if (error.request) {
+        console.error(`❌ No response from AI API: ${error.message}`);
+        throw new AppError(`No response from AI API: ${error.message}`, 500);
+      } else {
+        console.error(`❌ Custom prompt generation error: ${error.message}`);
+        throw new AppError(`Custom prompt generation error: ${error.message}`, 500);
+      }
     }
   }
 }
-

@@ -1,31 +1,34 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
-import { PrismaService } from '../prisma/prisma.service';
-import { LoginDto, RegisterDto } from './dto/auth.dto';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import prisma from '../config/prisma';
+import { AppError } from '../middleware/error.middleware';
 
-@Injectable()
+interface RegisterDto {
+  email: string;
+  password: string;
+}
+
+interface LoginDto {
+  email: string;
+  password: string;
+}
+
 export class AuthService {
-  constructor(
-    private prisma: PrismaService,
-    private jwtService: JwtService,
-  ) {}
-
   async register(dto: RegisterDto) {
     // Check if user exists
-    const existing = await this.prisma.user.findUnique({
+    const existing = await prisma.user.findUnique({
       where: { email: dto.email },
     });
 
     if (existing) {
-      throw new UnauthorizedException('Email already registered');
+      throw new AppError('Email already registered', 401);
     }
 
     // Hash password
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
     // Create user
-    const user = await this.prisma.user.create({
+    const user = await prisma.user.create({
       data: {
         email: dto.email,
         passwordHash,
@@ -48,18 +51,18 @@ export class AuthService {
 
   async login(dto: LoginDto) {
     // Find user
-    const user = await this.prisma.user.findUnique({
+    const user = await prisma.user.findUnique({
       where: { email: dto.email },
     });
 
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new AppError('Invalid credentials', 401);
     }
 
     // Verify password
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valid) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new AppError('Invalid credentials', 401);
     }
 
     // Generate token
@@ -76,15 +79,20 @@ export class AuthService {
   }
 
   private generateToken(userId: string, email: string, role: string) {
-    return this.jwtService.sign({
-      sub: userId,
-      email,
-      role,
-    });
+    const secret = process.env.JWT_SECRET || 'your-secret-key';
+    return jwt.sign(
+      {
+        sub: userId,
+        email,
+        role,
+      },
+      secret,
+      { expiresIn: '30d' }
+    );
   }
 
   async validateUser(userId: string) {
-    return this.prisma.user.findUnique({
+    return prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
@@ -94,4 +102,3 @@ export class AuthService {
     });
   }
 }
-

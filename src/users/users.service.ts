@@ -1,13 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
 import { UserRole } from '@prisma/client';
+import prisma from '../config/prisma';
+import { AppError } from '../middleware/error.middleware';
 
-@Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
-
   async findAll() {
-    return this.prisma.user.findMany({
+    return prisma.user.findMany({
       select: {
         id: true,
         email: true,
@@ -22,7 +19,7 @@ export class UsersService {
   }
 
   async findOne(id: string) {
-    return this.prisma.user.findUnique({
+    return prisma.user.findUnique({
       where: { id },
       select: {
         id: true,
@@ -34,13 +31,13 @@ export class UsersService {
   }
 
   async updateRole(id: string, role: UserRole) {
-    const user = await this.prisma.user.findUnique({ where: { id } });
-    
+    const user = await prisma.user.findUnique({ where: { id } });
+
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new AppError('User not found', 404);
     }
 
-    return this.prisma.user.update({
+    return prisma.user.update({
       where: { id },
       data: { role },
       select: {
@@ -53,15 +50,14 @@ export class UsersService {
   }
 
   async deleteUser(id: string) {
-    const user = await this.prisma.user.findUnique({ where: { id } });
-    
+    const user = await prisma.user.findUnique({ where: { id } });
+
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new AppError('User not found', 404);
     }
 
-    await this.prisma.user.delete({ where: { id } });
+    await prisma.user.delete({ where: { id } });
 
     return { message: 'User deleted successfully' };
   }
 }
-

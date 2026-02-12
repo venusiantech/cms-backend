@@ -1,27 +1,35 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { AiService } from '../ai-service/ai.service';
-import { CreateDomainDto, UpdateDomainDto } from './dto/domain.dto';
 import { DomainStatus } from '@prisma/client';
+import prisma from '../config/prisma';
+import { AppError } from '../middleware/error.middleware';
+import { AiService } from '../ai-service/ai.service';
 
-@Injectable()
+interface CreateDomainDto {
+  domainName: string;
+}
+
+interface UpdateDomainDto {
+  status?: string;
+  selectedMeaning?: string;
+}
+
 export class DomainsService {
-  constructor(
-    private prisma: PrismaService,
-    private aiService: AiService,
-  ) {}
+  private aiService: AiService;
+
+  constructor() {
+    this.aiService = new AiService();
+  }
 
   async create(userId: string, dto: CreateDomainDto) {
     // Check if domain already exists
-    const existing = await this.prisma.domain.findUnique({
+    const existing = await prisma.domain.findUnique({
       where: { domainName: dto.domainName },
     });
 
     if (existing) {
-      throw new ConflictException('Domain already registered');
+      throw new AppError('Domain already registered', 409);
     }
 
-    return this.prisma.domain.create({
+    return prisma.domain.create({
       data: {
         userId,
         domainName: dto.domainName,
@@ -36,7 +44,7 @@ export class DomainsService {
   async findAll(userId: string, userRole: string) {
     // Super admin can see all domains
     if (userRole === 'SUPER_ADMIN') {
-      return this.prisma.domain.findMany({
+      return prisma.domain.findMany({
         include: {
           user: {
             select: { id: true, email: true },
@@ -48,7 +56,7 @@ export class DomainsService {
     }
 
     // Regular users see only their domains
-    return this.prisma.domain.findMany({
+    return prisma.domain.findMany({
       where: { userId },
       include: {
         website: true,
@@ -58,7 +66,7 @@ export class DomainsService {
   }
 
   async findOne(id: string, userId: string, userRole: string) {
-    const domain = await this.prisma.domain.findUnique({
+    const domain = await prisma.domain.findUnique({
       where: { id },
       include: {
         website: {
@@ -79,19 +87,19 @@ export class DomainsService {
     });
 
     if (!domain) {
-      throw new NotFoundException('Domain not found');
+      throw new AppError('Domain not found', 404);
     }
 
     // Check ownership unless super admin
     if (userRole !== 'SUPER_ADMIN' && domain.userId !== userId) {
-      throw new ForbiddenException('Access denied');
+      throw new AppError('Access denied', 403);
     }
 
     return domain;
   }
 
   async findByDomainName(domainName: string) {
-    return this.prisma.domain.findUnique({
+    return prisma.domain.findUnique({
       where: { domainName },
       include: {
         website: {
@@ -116,22 +124,29 @@ export class DomainsService {
     });
   }
 
-  async update(id: string, userId: string, userRole: string, dto: UpdateDomainDto) {
-    const domain = await this.findOne(id, userId, userRole);
+  async update(
+    id: string,
+    userId: string,
+    userRole: string,
+    dto: UpdateDomainDto
+  ) {
+    await this.findOne(id, userId, userRole);
 
-    return this.prisma.domain.update({
+    return prisma.domain.update({
       where: { id },
       data: {
         ...(dto.status && { status: dto.status as DomainStatus }),
-        ...(dto.selectedMeaning !== undefined && { selectedMeaning: dto.selectedMeaning }),
+        ...(dto.selectedMeaning !== undefined && {
+          selectedMeaning: dto.selectedMeaning,
+        }),
       },
     });
   }
 
   async delete(id: string, userId: string, userRole: string) {
-    const domain = await this.findOne(id, userId, userRole);
+    await this.findOne(id, userId, userRole);
 
-    await this.prisma.domain.delete({
+    await prisma.domain.delete({
       where: { id },
     });
 
@@ -140,21 +155,24 @@ export class DomainsService {
 
   async getSynonyms(id: string, userId: string, userRole: string) {
     const domain = await this.findOne(id, userId, userRole);
-    
+
     // Extract the main word from domain name (remove TLD and special chars)
-    const domainWord = domain.domainName.split('.')[0].replace(/[^a-zA-Z]/g, '');
-    
-    console.log(`\n🔍 Getting synonyms for domain: ${domain.domainName} (word: ${domainWord})`);
-    
-    // Call AI service to get synonyms
-    const meanings = await this.aiService.findSynonyms(domainWord, 5);
-    
+    const domainWord = domain.domainName
+      .split('.')[0]
+      .replace(/[^a-zA-Z]/g, '');
+
+    console.log(
+      `\n🔍 Getting synonyms for domain: ${domain.domainName} (word: ${domainWord})`
+    );
+
+    // Call AI service to get synonyms (returns object with meaning as key, example as value)
+    const synonymsObj = await this.aiService.findSynonyms(domainWord, 5);
+
     return {
       domainId: domain.id,
       domainName: domain.domainName,
       word: domainWord,
-      meanings,
+      meanings: synonymsObj, // Object format: { "meaning": "example sentence" }
     };
   }
 }
-

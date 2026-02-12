@@ -1,18 +1,27 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { CreatePromptDto, UpdatePromptDto } from './dto/ai-prompt.dto';
-import { PromptType } from '@prisma/client';
+import prisma from '../config/prisma';
+import { AppError } from '../middleware/error.middleware';
 
-@Injectable()
+interface CreatePromptDto {
+  promptKey: string;
+  promptText: string;
+  promptType: string;
+  templateKey: string;
+}
+
+interface UpdatePromptDto {
+  promptKey?: string;
+  promptText?: string;
+  promptType?: string;
+  templateKey?: string;
+}
+
 export class AiPromptsService {
-  constructor(private prisma: PrismaService) {}
-
   async create(userId: string, dto: CreatePromptDto) {
-    return this.prisma.aiPrompt.create({
+    return prisma.aiPrompt.create({
       data: {
         promptKey: dto.promptKey,
         promptText: dto.promptText,
-        promptType: dto.promptType as PromptType,
+        promptType: dto.promptType as any,
         templateKey: dto.templateKey,
         createdBy: userId,
       },
@@ -20,32 +29,34 @@ export class AiPromptsService {
   }
 
   async findAll(templateKey?: string) {
-    return this.prisma.aiPrompt.findMany({
+    return prisma.aiPrompt.findMany({
       where: templateKey ? { templateKey } : undefined,
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async findOne(id: string) {
-    const prompt = await this.prisma.aiPrompt.findUnique({
+    const prompt = await prisma.aiPrompt.findUnique({
       where: { id },
     });
 
     if (!prompt) {
-      throw new NotFoundException('AI prompt not found');
+      throw new AppError('AI prompt not found', 404);
     }
 
     return prompt;
   }
 
   async update(id: string, dto: UpdatePromptDto) {
-    await this.findOne(id);
+    const prompt = await this.findOne(id);
 
-    return this.prisma.aiPrompt.update({
+    return prisma.aiPrompt.update({
       where: { id },
       data: {
+        ...(dto.promptKey && { promptKey: dto.promptKey }),
         ...(dto.promptText && { promptText: dto.promptText }),
-        ...(dto.promptType && { promptType: dto.promptType as PromptType }),
+        ...(dto.promptType && { promptType: dto.promptType as any }),
+        ...(dto.templateKey && { templateKey: dto.templateKey }),
       },
     });
   }
@@ -53,11 +64,10 @@ export class AiPromptsService {
   async delete(id: string) {
     await this.findOne(id);
 
-    await this.prisma.aiPrompt.delete({
+    await prisma.aiPrompt.delete({
       where: { id },
     });
 
     return { message: 'AI prompt deleted successfully' };
   }
 }
-
