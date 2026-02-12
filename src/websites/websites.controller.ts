@@ -1,7 +1,7 @@
 import { Controller, Post, Put, Body, Param, UseGuards, Get } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { WebsitesService } from './websites.service';
-import { GenerateWebsiteDto, UpdateAdsDto, UpdateContactFormDto } from './dto/website.dto';
+import { GenerateWebsiteDto, UpdateAdsDto, UpdateContactFormDto, UpdateTemplateDto } from './dto/website.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { WebsiteQueueService } from '../queue/website-queue.service';
@@ -15,6 +15,12 @@ export class WebsitesController {
     private websitesService: WebsitesService,
     private queueService: WebsiteQueueService,
   ) {}
+
+  @Get('templates')
+  @ApiOperation({ summary: 'Get all available templates' })
+  getTemplates() {
+    return this.websitesService.getAvailableTemplates();
+  }
 
   @Post('generate')
   @ApiOperation({ summary: 'Generate complete website with AI (background job)' })
@@ -70,6 +76,16 @@ export class WebsitesController {
     @Body() dto: UpdateContactFormDto,
   ) {
     return this.websitesService.updateContactForm(id, user.id, user.role, dto);
+  }
+
+  @Put(':id/template')
+  @ApiOperation({ summary: 'Update website template' })
+  updateTemplate(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() dto: UpdateTemplateDto,
+  ) {
+    return this.websitesService.updateTemplate(id, user.id, user.role, dto);
   }
 }
 

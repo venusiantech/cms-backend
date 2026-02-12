@@ -34,3 +34,9 @@ export class UpdateContactFormDto {
   contactFormEnabled: boolean;
 }
 
+export class UpdateTemplateDto {
+  @ApiProperty({ example: 'modernNews', description: 'Template key to use for the website' })
+  @IsString()
+  templateKey: string;
+}
+

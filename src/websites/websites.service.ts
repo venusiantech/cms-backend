@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiService } from '../ai-service/ai.service';
-import { GenerateWebsiteDto, UpdateAdsDto, UpdateContactFormDto } from './dto/website.dto';
+import { GenerateWebsiteDto, UpdateAdsDto, UpdateContactFormDto, UpdateTemplateDto } from './dto/website.dto';
+import { getAvailableTemplates, isValidTemplate } from './templates.constant';
 
 @Injectable()
 export class WebsitesService {
@@ -838,6 +839,53 @@ export class WebsitesService {
       message: `Successfully generated ${blogs.length} more blogs`,
       blogsAdded: blogs.length,
     };
+  }
+
+  /**
+   * Update website template
+   */
+  async updateTemplate(websiteId: string, userId: string, userRole: string, dto: UpdateTemplateDto) {
+    console.log(`\n🎨 === UPDATE WEBSITE TEMPLATE ===`);
+    console.log(`Website ID: ${websiteId}, New Template: ${dto.templateKey}`);
+
+    // Validate template key
+    if (!isValidTemplate(dto.templateKey)) {
+      throw new BadRequestException(`Invalid template key: ${dto.templateKey}`);
+    }
+
+    const website = await this.prisma.website.findUnique({
+      where: { id: websiteId },
+      include: { domain: true },
+    });
+
+    if (!website) {
+      throw new NotFoundException('Website not found');
+    }
+
+    // Check ownership
+    if (userRole !== 'SUPER_ADMIN' && website.domain.userId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    console.log(`✅ Updating template from "${website.templateKey}" to "${dto.templateKey}"`);
+
+    const updatedWebsite = await this.prisma.website.update({
+      where: { id: websiteId },
+      data: { templateKey: dto.templateKey },
+    });
+
+    console.log(`🎉 Template updated successfully!`);
+    return updatedWebsite;
+  }
+
+  /**
+   * Get all available templates
+   */
+  getAvailableTemplates() {
+    console.log(`\n📋 === GET AVAILABLE TEMPLATES ===`);
+    const templates = getAvailableTemplates();
+    console.log(`✅ Returning ${templates.length} available templates`);
+    return templates;
   }
 }
 
