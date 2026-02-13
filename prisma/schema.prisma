@@ -77,6 +77,11 @@ model Website {
   metaDescription    String?  @map("meta_description") @db.Text // Custom description for social sharing
   metaImage          String?  @map("meta_image") // Custom image URL for social sharing (og:image)
   
+  // Social Media Links
+  instagramUrl       String?  @map("instagram_url") // Instagram profile URL
+  facebookUrl        String?  @map("facebook_url") // Facebook page URL
+  twitterUrl         String?  @map("twitter_url") // Twitter/X profile URL
+  
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
   

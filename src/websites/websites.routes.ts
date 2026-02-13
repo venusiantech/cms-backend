@@ -417,4 +417,57 @@ router.put(
   })
 );
 
+/**
+ * @swagger
+ * /websites/{id}/social-media:
+ *   put:
+ *     tags: [Websites]
+ *     summary: Update website social media links (Instagram, Facebook, Twitter)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               instagramUrl:
+ *                 type: string
+ *                 example: "https://instagram.com/yourprofile"
+ *               facebookUrl:
+ *                 type: string
+ *                 example: "https://facebook.com/yourpage"
+ *               twitterUrl:
+ *                 type: string
+ *                 example: "https://twitter.com/yourhandle"
+ *     responses:
+ *       200:
+ *         description: Social media links updated
+ */
+router.put(
+  '/:id/social-media',
+  validate([
+    param('id').isUUID().withMessage('Invalid website ID'),
+    body('instagramUrl').optional().isURL().withMessage('Invalid Instagram URL'),
+    body('facebookUrl').optional().isURL().withMessage('Invalid Facebook URL'),
+    body('twitterUrl').optional().isURL().withMessage('Invalid Twitter URL'),
+  ]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const website = await websitesService.updateSocialMedia(
+      req.params.id,
+      req.user!.id,
+      req.user!.role,
+      req.body
+    );
+    res.json(website);
+  })
+);
+
 export default router;

@@ -20,6 +20,12 @@ interface UpdateWebsiteMetadataDto {
   metaImage?: string;
 }
 
+interface UpdateSocialMediaDto {
+  instagramUrl?: string;
+  facebookUrl?: string;
+  twitterUrl?: string;
+}
+
 export class WebsitesService {
   /**
    * Get all available templates
@@ -204,6 +210,41 @@ export class WebsitesService {
     if (dto.metaTitle !== undefined) updateData.metaTitle = dto.metaTitle;
     if (dto.metaDescription !== undefined) updateData.metaDescription = dto.metaDescription;
     if (dto.metaImage !== undefined) updateData.metaImage = dto.metaImage;
+
+    return prisma.website.update({
+      where: { id: websiteId },
+      data: updateData,
+    });
+  }
+
+  /**
+   * Update website social media links
+   */
+  async updateSocialMedia(
+    websiteId: string,
+    userId: string,
+    userRole: string,
+    dto: UpdateSocialMediaDto
+  ) {
+    // Get website with domain to check ownership
+    const website = await prisma.website.findUnique({
+      where: { id: websiteId },
+      include: { domain: true },
+    });
+
+    if (!website) {
+      throw new AppError('Website not found', 404);
+    }
+
+    // Check ownership (unless super admin)
+    if (userRole !== 'SUPER_ADMIN' && website.domain.userId !== userId) {
+      throw new AppError('Access denied', 403);
+    }
+
+    const updateData: any = {};
+    if (dto.instagramUrl !== undefined) updateData.instagramUrl = dto.instagramUrl || null;
+    if (dto.facebookUrl !== undefined) updateData.facebookUrl = dto.facebookUrl || null;
+    if (dto.twitterUrl !== undefined) updateData.twitterUrl = dto.twitterUrl || null;
 
     return prisma.website.update({
       where: { id: websiteId },
