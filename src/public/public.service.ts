@@ -106,6 +106,9 @@ export class PublicService {
         metaTitle: website.metaTitle,
         metaDescription: website.metaDescription,
         metaImage: website.metaImage,
+        instagramUrl: website.instagramUrl,
+        facebookUrl: website.facebookUrl,
+        twitterUrl: website.twitterUrl,
       },
       pages: website.pages.map((page) => ({
         id: page.id,
