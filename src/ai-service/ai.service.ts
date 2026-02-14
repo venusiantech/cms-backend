@@ -1,13 +1,16 @@
 import axios from 'axios';
 import { AppError } from '../middleware/error.middleware';
+import { StorageService } from '../storage/storage.service';
 
 export class AiService {
   private readonly apiKey: string;
   private readonly apiUrl: string;
+  private readonly storageService: StorageService;
 
   constructor() {
     this.apiKey = process.env.AADDYY_API_KEY || '';
     this.apiUrl = process.env.AADDYY_API_URL || 'https://backend.aaddyy.com';
+    this.storageService = new StorageService();
 
     console.log('\n🤖 === AADDYY AI SERVICE INITIALIZATION ===');
     console.log(`📋 API URL: ${this.apiUrl}`);
@@ -266,8 +269,15 @@ export class AiService {
           throw new AppError('Image URL is missing from API response', 500);
         }
 
-        console.log(`   Image URL: ${imageUrl.substring(0, 80)}...`);
-        return imageUrl;
+        console.log(`   Aaddyy Image URL: ${imageUrl.substring(0, 80)}...`);
+        console.log(`   Uploading to S3 and generating signed URL...`);
+        
+        // Upload to S3 and get signed URL
+        const s3SignedUrl = await this.storageService.uploadImageFromUrl(imageUrl);
+        
+        console.log(`   ✅ S3 URL: ${s3SignedUrl.substring(0, 100)}...`);
+        
+        return s3SignedUrl;
       } else {
         const errorMsg = response.data.error || 'API returned success: false';
         console.error(`❌ Image generation failed: ${JSON.stringify(errorMsg)}`);
