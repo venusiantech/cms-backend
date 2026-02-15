@@ -47,27 +47,49 @@ export class DomainsService {
       dto.domainName
     );
 
-    // Create domain with Cloudflare data
-    const domain = await prisma.domain.create({
-      data: {
-        userId,
-        domainName: dto.domainName,
-        status: 'PENDING',
-        cloudflareZoneId: cloudflareResult?.zoneId || null,
-        cloudflareStatus: cloudflareResult?.status || null,
-        nameServers: cloudflareResult?.nameServers || [],
-      },
-      include: {
-        website: true,
-      },
+    // Generate subdomain for the website
+    const randomString = Math.random().toString(36).substring(2, 6);
+    const subdomain = `${dto.domainName.split('.')[0]}-${randomString}`;
+
+    // Create domain with Cloudflare data AND website record in a transaction
+    const domain = await prisma.$transaction(async (tx) => {
+      const newDomain = await tx.domain.create({
+        data: {
+          userId,
+          domainName: dto.domainName,
+          status: 'PENDING',
+          cloudflareZoneId: cloudflareResult?.zoneId || null,
+          cloudflareStatus: cloudflareResult?.status || null,
+          nameServers: cloudflareResult?.nameServers || [],
+        },
+      });
+
+      // Create website record with subdomain
+      await tx.website.create({
+        data: {
+          domainId: newDomain.id,
+          subdomain: subdomain,
+          templateKey: 'modernNews', // Default template
+          contactFormEnabled: true,
+        },
+      });
+
+      // Fetch domain with website relation
+      return tx.domain.findUnique({
+        where: { id: newDomain.id },
+        include: {
+          website: true,
+        },
+      });
     });
 
-    console.log(`✅ Domain created with ID: ${domain.id}`);
+    console.log(`✅ Domain created with ID: ${domain!.id}`);
+    console.log(`✅ Website record created with subdomain: ${subdomain}`);
     if (cloudflareResult) {
       console.log(`✅ Cloudflare zone created: ${cloudflareResult.zoneId}`);
     }
 
-    return this.transformDomainResponse(domain);
+    return this.transformDomainResponse(domain!);
   }
 
   async findAll(userId: string, userRole: string) {
@@ -78,7 +100,11 @@ export class DomainsService {
           user: {
             select: { id: true, email: true },
           },
-          website: true,
+          website: {
+            include: {
+              pages: true,
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -89,7 +115,11 @@ export class DomainsService {
     const domains = await prisma.domain.findMany({
       where: { userId },
       include: {
-        website: true,
+        website: {
+          include: {
+            pages: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -251,6 +281,9 @@ export class DomainsService {
       });
 
       console.log(`✅ DNS status updated: ${status}`);
+
+      // Debug logging for auto-deployment trigger
+      console.log(`🔍 Auto-deploy check: status=${status}, oldStatus=${oldStatus}, hasWebsite=${!!domain.website}`);
 
       // Auto-deploy workers when DNS becomes active
       if (status === 'active' && oldStatus !== 'active' && domain.website) {

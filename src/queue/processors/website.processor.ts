@@ -31,14 +31,17 @@ export async function processGenerateWebsite(job: Job<WebsiteGenerationJob>) {
 
     await job.progress(20);
 
-    // IDEMPOTENCY CHECK: Check if website already exists for this domain
+    // IDEMPOTENCY CHECK: Check if website already exists with content
     const existingWebsite = await prisma.website.findUnique({
       where: { domainId },
+      include: {
+        pages: true,
+      },
     });
 
-    if (existingWebsite) {
+    if (existingWebsite && existingWebsite.pages.length > 0) {
       console.log(
-        `✅ Website already exists for domain ${domain.domainName} (idempotent completion)`
+        `✅ Website already exists with content for domain ${domain.domainName} (idempotent completion)`
       );
 
       // Return existing website as successful completion (idempotent)
@@ -51,21 +54,33 @@ export async function processGenerateWebsite(job: Job<WebsiteGenerationJob>) {
       };
     }
 
-    // Generate subdomain
-    const randomString = Math.random().toString(36).substring(2, 6);
-    const subdomain = `${domain.domainName.split('.')[0]}-${randomString}`;
+    // Use existing website or create new one
+    let website;
+    let subdomain;
 
-    // Create website
-    const website = await prisma.website.create({
-      data: {
-        domainId,
-        subdomain,
-        templateKey,
-        contactFormEnabled,
-      },
-    });
+    if (existingWebsite) {
+      // Website record exists but has no content - use it
+      website = existingWebsite;
+      subdomain = existingWebsite.subdomain;
+      console.log(`✅ Using existing website record with subdomain: ${subdomain}`);
+    } else {
+      // Generate subdomain
+      const randomString = Math.random().toString(36).substring(2, 6);
+      subdomain = `${domain.domainName.split('.')[0]}-${randomString}`;
 
-    console.log(`✅ Website created with subdomain: ${subdomain}`);
+      // Create website
+      website = await prisma.website.create({
+        data: {
+          domainId,
+          subdomain,
+          templateKey,
+          contactFormEnabled,
+        },
+      });
+
+      console.log(`✅ Website created with subdomain: ${subdomain}`);
+    }
+
     await job.progress(30);
 
     // Create Home page
