@@ -255,4 +255,55 @@ export class DomainsService {
 
     throw new AppError('Failed to check DNS status', 500);
   }
+
+  async deployWorkerDomains(id: string, userId: string, userRole: string) {
+    // Fetch domain directly from DB
+    const domain = await prisma.domain.findUnique({
+      where: { id },
+    });
+
+    if (!domain) {
+      throw new AppError('Domain not found', 404);
+    }
+
+    // Check ownership unless super admin
+    if (userRole !== 'SUPER_ADMIN' && domain.userId !== userId) {
+      throw new AppError('Access denied', 403);
+    }
+
+    if (!domain.cloudflareZoneId) {
+      throw new AppError('No DNS zone configured for this domain', 400);
+    }
+
+    console.log(
+      `\n🚀 Deploying Cloudflare Workers for domain: ${domain.domainName}`
+    );
+
+    // Deploy both root domain and www subdomain
+    const result1 = await this.cloudflareService.addWorkerDomain(
+      domain.domainName,
+      domain.cloudflareZoneId
+    );
+
+    const result2 = await this.cloudflareService.addWorkerDomain(
+      `www.${domain.domainName}`,
+      domain.cloudflareZoneId
+    );
+
+    const allSuccess = result1.success && result2.success;
+
+    console.log(
+      allSuccess
+        ? `✅ Worker domains deployed successfully`
+        : `⚠️  Worker domains partially deployed`
+    );
+
+    return {
+      success: allSuccess,
+      deployed: [
+        { hostname: result1.hostname, success: result1.success },
+        { hostname: result2.hostname, success: result2.success },
+      ],
+    };
+  }
 }

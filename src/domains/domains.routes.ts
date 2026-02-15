@@ -234,4 +234,35 @@ router.get(
   })
 );
 
+/**
+ * @swagger
+ * /domains/{id}/deploy-workers:
+ *   post:
+ *     tags: [Domains]
+ *     summary: Deploy Cloudflare Workers for domain (root + www)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Worker domains deployed
+ */
+router.post(
+  '/:id/deploy-workers',
+  validate([param('id').isUUID().withMessage('Invalid domain ID')]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const result = await domainsService.deployWorkerDomains(
+      req.params.id,
+      req.user!.id,
+      req.user!.role
+    );
+    res.json(result);
+  })
+);
+
 export default router;

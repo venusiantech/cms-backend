@@ -111,4 +111,54 @@ export class CloudflareService {
       return null;
     }
   }
+
+  async addWorkerDomain(
+    hostname: string,
+    zoneId: string
+  ): Promise<{ success: boolean; hostname: string }> {
+    if (!this.apiToken || !this.accountId) {
+      console.log('❌ Cloudflare not configured, skipping worker domain setup');
+      return { success: false, hostname };
+    }
+
+    try {
+      console.log(`\n🔧 Adding Cloudflare Worker domain: ${hostname}`);
+
+      const response = await axios.put(
+        `${this.baseUrl}/accounts/${this.accountId}/workers/domains`,
+        {
+          environment: 'production',
+          hostname: hostname,
+          service: 'jaal-routerv3',
+          zone_id: zoneId,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.data.success) {
+        console.log(`✅ Worker domain configured: ${hostname}`);
+        return { success: true, hostname };
+      }
+
+      console.error(
+        `❌ Failed to configure worker domain ${hostname}:`,
+        response.data.errors
+      );
+      return { success: false, hostname };
+    } catch (error: any) {
+      console.error(
+        `❌ Failed to add worker domain ${hostname}:`,
+        error.message
+      );
+      if (error.response?.data) {
+        console.error('   Error details:', error.response.data);
+      }
+      return { success: false, hostname };
+    }
+  }
 }
