@@ -2,6 +2,7 @@ import { DomainStatus } from '@prisma/client';
 import prisma from '../config/prisma';
 import { AppError } from '../middleware/error.middleware';
 import { AiService } from '../ai-service/ai.service';
+import { CloudflareService } from '../cloudflare-service/cloudflare.service';
 
 interface CreateDomainDto {
   domainName: string;
@@ -14,9 +15,11 @@ interface UpdateDomainDto {
 
 export class DomainsService {
   private aiService: AiService;
+  private cloudflareService: CloudflareService;
 
   constructor() {
     this.aiService = new AiService();
+    this.cloudflareService = new CloudflareService();
   }
 
   async create(userId: string, dto: CreateDomainDto) {
@@ -29,16 +32,33 @@ export class DomainsService {
       throw new AppError('Domain already registered', 409);
     }
 
-    return prisma.domain.create({
+    // Call Cloudflare API to create DNS zone
+    console.log(`\n🚀 Creating domain: ${dto.domainName}`);
+    const cloudflareResult = await this.cloudflareService.addDnsZone(
+      dto.domainName
+    );
+
+    // Create domain with Cloudflare data
+    const domain = await prisma.domain.create({
       data: {
         userId,
         domainName: dto.domainName,
         status: 'PENDING',
+        cloudflareZoneId: cloudflareResult?.zoneId || null,
+        cloudflareStatus: cloudflareResult?.status || null,
+        nameServers: cloudflareResult?.nameServers || [],
       },
       include: {
         website: true,
       },
     });
+
+    console.log(`✅ Domain created with ID: ${domain.id}`);
+    if (cloudflareResult) {
+      console.log(`✅ Cloudflare zone created: ${cloudflareResult.zoneId}`);
+    }
+
+    return domain;
   }
 
   async findAll(userId: string, userRole: string) {

@@ -36,13 +36,16 @@ enum UserRole {
 // 2️⃣ DOMAINS TABLE
 // ============================================
 model Domain {
-  id               String       @id @default(uuid())
-  userId           String       @map("user_id")
-  domainName       String       @unique @map("domain_name")
-  status           DomainStatus @default(PENDING)
-  selectedMeaning  String?      @map("selected_meaning") @db.Text // Stores user's selected meaning/context
-  createdAt        DateTime     @default(now()) @map("created_at")
-  updatedAt        DateTime     @updatedAt @map("updated_at")
+  id                String       @id @default(uuid())
+  userId            String       @map("user_id")
+  domainName        String       @unique @map("domain_name")
+  status            DomainStatus @default(PENDING)
+  selectedMeaning   String?      @map("selected_meaning") @db.Text // Stores user's selected meaning/context
+  cloudflareZoneId  String?      @map("cloudflare_zone_id") // Cloudflare Zone ID
+  cloudflareStatus  String?      @map("cloudflare_status") // pending, active, etc.
+  nameServers       String[]     @map("name_servers") @default([]) // Array of nameservers
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
   
   // Relations
   user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
