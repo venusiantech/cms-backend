@@ -59,10 +59,17 @@ export async function processGenerateWebsite(job: Job<WebsiteGenerationJob>) {
     let subdomain;
 
     if (existingWebsite) {
-      // Website record exists but has no content - use it
-      website = existingWebsite;
+      // Website record exists but has no content - update it with user's template selection
+      website = await prisma.website.update({
+        where: { id: existingWebsite.id },
+        data: {
+          templateKey,
+          contactFormEnabled,
+        },
+      });
       subdomain = existingWebsite.subdomain;
       console.log(`✅ Using existing website record with subdomain: ${subdomain}`);
+      console.log(`✅ Updated template to: ${templateKey}, contactForm: ${contactFormEnabled}`);
     } else {
       // Generate subdomain
       const randomString = Math.random().toString(36).substring(2, 6);
