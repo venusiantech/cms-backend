@@ -203,4 +203,35 @@ router.get(
   })
 );
 
+/**
+ * @swagger
+ * /domains/{id}/dns-status:
+ *   get:
+ *     tags: [Domains]
+ *     summary: Check DNS status from Cloudflare
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: DNS status
+ */
+router.get(
+  '/:id/dns-status',
+  validate([param('id').isUUID().withMessage('Invalid domain ID')]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const result = await domainsService.checkDnsStatus(
+      req.params.id,
+      req.user!.id,
+      req.user!.role
+    );
+    res.json(result);
+  })
+);
+
 export default router;

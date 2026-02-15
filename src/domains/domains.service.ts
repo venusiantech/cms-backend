@@ -195,4 +195,40 @@ export class DomainsService {
       meanings: synonymsObj, // Object format: { "meaning": "example sentence" }
     };
   }
+
+  async checkDnsStatus(id: string, userId: string, userRole: string) {
+    const domain = await this.findOne(id, userId, userRole);
+
+    if (!domain.cloudflareZoneId) {
+      throw new AppError('No Cloudflare zone configured for this domain', 400);
+    }
+
+    console.log(
+      `\n🔍 Checking DNS status for domain: ${domain.domainName} (Zone: ${domain.cloudflareZoneId})`
+    );
+
+    // Check status with Cloudflare
+    const status = await this.cloudflareService.checkZoneStatus(
+      domain.cloudflareZoneId
+    );
+
+    if (status) {
+      // Update domain status in database
+      await prisma.domain.update({
+        where: { id },
+        data: { cloudflareStatus: status },
+      });
+
+      console.log(`✅ DNS status updated: ${status}`);
+
+      return {
+        domainId: domain.id,
+        domainName: domain.domainName,
+        cloudflareStatus: status,
+        cloudflareZoneId: domain.cloudflareZoneId,
+      };
+    }
+
+    throw new AppError('Failed to check DNS status', 500);
+  }
 }
