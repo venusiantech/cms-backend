@@ -213,6 +213,9 @@ export class DomainsService {
     // Fetch domain directly from DB without transformation to access cloudflareZoneId
     const domain = await prisma.domain.findUnique({
       where: { id },
+      include: {
+        website: true,
+      },
     });
 
     if (!domain) {
@@ -232,6 +235,9 @@ export class DomainsService {
       `\n🔍 Checking DNS status for domain: ${domain.domainName} (Zone: ${domain.cloudflareZoneId})`
     );
 
+    // Store old status to detect changes
+    const oldStatus = domain.cloudflareStatus;
+
     // Check status with Cloudflare
     const status = await this.cloudflareService.checkZoneStatus(
       domain.cloudflareZoneId
@@ -246,6 +252,39 @@ export class DomainsService {
 
       console.log(`✅ DNS status updated: ${status}`);
 
+      // Auto-deploy workers when DNS becomes active
+      if (status === 'active' && oldStatus !== 'active' && domain.website) {
+        console.log(
+          `\n🎯 DNS became active! Auto-deploying Worker domains and KV mappings...`
+        );
+
+        try {
+          const deployResult = await this.deployWorkerDomains(
+            id,
+            userId,
+            userRole
+          );
+
+          return {
+            domainId: domain.id,
+            domainName: domain.domainName,
+            nameServersStatus: status,
+            autoDeployed: true,
+            deploymentSuccess: deployResult.success,
+          };
+        } catch (error: any) {
+          console.error(`❌ Auto-deployment failed:`, error.message);
+          // Don't fail the status check if deployment fails
+          return {
+            domainId: domain.id,
+            domainName: domain.domainName,
+            nameServersStatus: status,
+            autoDeployed: false,
+            deploymentError: error.message,
+          };
+        }
+      }
+
       return {
         domainId: domain.id,
         domainName: domain.domainName,
@@ -257,9 +296,12 @@ export class DomainsService {
   }
 
   async deployWorkerDomains(id: string, userId: string, userRole: string) {
-    // Fetch domain directly from DB
+    // Fetch domain directly from DB with website relation
     const domain = await prisma.domain.findUnique({
       where: { id },
+      include: {
+        website: true,
+      },
     });
 
     if (!domain) {
@@ -275,34 +317,68 @@ export class DomainsService {
       throw new AppError('No DNS zone configured for this domain', 400);
     }
 
+    if (!domain.website) {
+      throw new AppError('No website found for this domain', 400);
+    }
+
+    const subdomainValue = `${domain.website.subdomain}.jaal.com`;
+
     console.log(
       `\n🚀 Deploying Cloudflare Workers for domain: ${domain.domainName}`
     );
 
-    // Deploy both root domain and www subdomain
+    // Deploy root domain worker
     const result1 = await this.cloudflareService.addWorkerDomain(
       domain.domainName,
       domain.cloudflareZoneId
     );
 
+    // If worker deployed successfully, add KV mapping
+    let kv1 = { success: false, key: domain.domainName };
+    if (result1.success) {
+      kv1 = await this.cloudflareService.addKvMapping(
+        domain.domainName,
+        subdomainValue
+      );
+    }
+
+    // Deploy www subdomain worker
     const result2 = await this.cloudflareService.addWorkerDomain(
       `www.${domain.domainName}`,
       domain.cloudflareZoneId
     );
 
-    const allSuccess = result1.success && result2.success;
+    // If worker deployed successfully, add KV mapping
+    let kv2 = { success: false, key: `www.${domain.domainName}` };
+    if (result2.success) {
+      kv2 = await this.cloudflareService.addKvMapping(
+        `www.${domain.domainName}`,
+        subdomainValue
+      );
+    }
+
+    const allSuccess =
+      result1.success && result2.success && kv1.success && kv2.success;
 
     console.log(
       allSuccess
-        ? `✅ Worker domains deployed successfully`
-        : `⚠️  Worker domains partially deployed`
+        ? `✅ Worker domains and KV mappings deployed successfully`
+        : `⚠️  Worker domains and KV mappings partially deployed`
     );
 
     return {
       success: allSuccess,
       deployed: [
-        { hostname: result1.hostname, success: result1.success },
-        { hostname: result2.hostname, success: result2.success },
+        {
+          hostname: result1.hostname,
+          workerSuccess: result1.success,
+          kvSuccess: kv1.success,
+        },
+        {
+          hostname: result2.hostname,
+          workerSuccess: result2.success,
+          kvSuccess: kv2.success,
+        },
       ],
     };
   }

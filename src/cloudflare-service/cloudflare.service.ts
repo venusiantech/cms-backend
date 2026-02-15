@@ -15,11 +15,13 @@ interface CloudflareZoneResponse {
 export class CloudflareService {
   private apiToken: string;
   private accountId: string;
+  private kvNamespaceId: string;
   private baseUrl = 'https://api.cloudflare.com/client/v4';
 
   constructor() {
     this.apiToken = process.env.CLOUDFLARE_API_TOKEN || '';
     this.accountId = process.env.CLOUDFLARE_ACCOUNT_ID || '';
+    this.kvNamespaceId = process.env.CLOUDFLARE_KV_NAMESPACE_ID || '';
 
     if (!this.apiToken || !this.accountId) {
       console.warn(
@@ -159,6 +161,53 @@ export class CloudflareService {
         console.error('   Error details:', error.response.data);
       }
       return { success: false, hostname };
+    }
+  }
+
+  async addKvMapping(
+    domainKey: string,
+    subdomainValue: string
+  ): Promise<{ success: boolean; key: string }> {
+    if (!this.apiToken || !this.accountId || !this.kvNamespaceId) {
+      console.log('❌ Cloudflare KV not configured, skipping KV mapping');
+      return { success: false, key: domainKey };
+    }
+
+    try {
+      console.log(
+        `\n🔑 Adding KV mapping: ${domainKey} → ${subdomainValue}`
+      );
+
+      const response = await axios.put(
+        `${this.baseUrl}/accounts/${this.accountId}/storage/kv/namespaces/${this.kvNamespaceId}/values/${domainKey}`,
+        subdomainValue,
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiToken}`,
+            'Content-Type': 'text/plain',
+          },
+        }
+      );
+
+      if (response.data.success) {
+        console.log(`✅ KV mapping added: ${domainKey} → ${subdomainValue}`);
+        return { success: true, key: domainKey };
+      }
+
+      console.error(
+        `❌ Failed to add KV mapping for ${domainKey}:`,
+        response.data.errors
+      );
+      return { success: false, key: domainKey };
+    } catch (error: any) {
+      console.error(
+        `❌ Failed to add KV mapping for ${domainKey}:`,
+        error.message
+      );
+      if (error.response?.data) {
+        console.error('   Error details:', error.response.data);
+      }
+      return { success: false, key: domainKey };
     }
   }
 }
