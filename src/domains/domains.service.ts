@@ -22,6 +22,15 @@ export class DomainsService {
     this.cloudflareService = new CloudflareService();
   }
 
+  // Transform domain response to hide cloudflareZoneId and rename cloudflareStatus
+  private transformDomainResponse(domain: any) {
+    const { cloudflareZoneId, cloudflareStatus, ...rest } = domain;
+    return {
+      ...rest,
+      nameServersStatus: cloudflareStatus,
+    };
+  }
+
   async create(userId: string, dto: CreateDomainDto) {
     // Check if domain already exists
     const existing = await prisma.domain.findUnique({
@@ -58,13 +67,13 @@ export class DomainsService {
       console.log(`✅ Cloudflare zone created: ${cloudflareResult.zoneId}`);
     }
 
-    return domain;
+    return this.transformDomainResponse(domain);
   }
 
   async findAll(userId: string, userRole: string) {
     // Super admin can see all domains
     if (userRole === 'SUPER_ADMIN') {
-      return prisma.domain.findMany({
+      const domains = await prisma.domain.findMany({
         include: {
           user: {
             select: { id: true, email: true },
@@ -73,16 +82,18 @@ export class DomainsService {
         },
         orderBy: { createdAt: 'desc' },
       });
+      return domains.map((d) => this.transformDomainResponse(d));
     }
 
     // Regular users see only their domains
-    return prisma.domain.findMany({
+    const domains = await prisma.domain.findMany({
       where: { userId },
       include: {
         website: true,
       },
       orderBy: { createdAt: 'desc' },
     });
+    return domains.map((d) => this.transformDomainResponse(d));
   }
 
   async findOne(id: string, userId: string, userRole: string) {
@@ -115,7 +126,7 @@ export class DomainsService {
       throw new AppError('Access denied', 403);
     }
 
-    return domain;
+    return this.transformDomainResponse(domain);
   }
 
   async findByDomainName(domainName: string) {
@@ -152,7 +163,7 @@ export class DomainsService {
   ) {
     await this.findOne(id, userId, userRole);
 
-    return prisma.domain.update({
+    const updated = await prisma.domain.update({
       where: { id },
       data: {
         ...(dto.status && { status: dto.status as DomainStatus }),
@@ -161,6 +172,8 @@ export class DomainsService {
         }),
       },
     });
+
+    return this.transformDomainResponse(updated);
   }
 
   async delete(id: string, userId: string, userRole: string) {
@@ -197,10 +210,22 @@ export class DomainsService {
   }
 
   async checkDnsStatus(id: string, userId: string, userRole: string) {
-    const domain = await this.findOne(id, userId, userRole);
+    // Fetch domain directly from DB without transformation to access cloudflareZoneId
+    const domain = await prisma.domain.findUnique({
+      where: { id },
+    });
+
+    if (!domain) {
+      throw new AppError('Domain not found', 404);
+    }
+
+    // Check ownership unless super admin
+    if (userRole !== 'SUPER_ADMIN' && domain.userId !== userId) {
+      throw new AppError('Access denied', 403);
+    }
 
     if (!domain.cloudflareZoneId) {
-      throw new AppError('No Cloudflare zone configured for this domain', 400);
+      throw new AppError('No DNS zone configured for this domain', 400);
     }
 
     console.log(
@@ -224,8 +249,7 @@ export class DomainsService {
       return {
         domainId: domain.id,
         domainName: domain.domainName,
-        cloudflareStatus: status,
-        cloudflareZoneId: domain.cloudflareZoneId,
+        nameServersStatus: status,
       };
     }
 
