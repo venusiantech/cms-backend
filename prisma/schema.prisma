@@ -75,10 +75,12 @@ model Website {
   adsApproved        Boolean  @default(false) @map("ads_approved")
   contactFormEnabled Boolean  @default(true) @map("contact_form_enabled") // Toggle for contact form visibility
   
-  // SEO & Social Metadata (for link previews)
-  metaTitle          String?  @map("meta_title") // Custom title for social sharing
-  metaDescription    String?  @map("meta_description") @db.Text // Custom description for social sharing
+  // SEO & Social Metadata (for link previews & search engines)
+  metaTitle          String?  @map("meta_title") // Custom title for SEO & social sharing
+  metaDescription    String?  @map("meta_description") @db.Text // Custom description for SEO & social sharing
   metaImage          String?  @map("meta_image") // Custom image URL for social sharing (og:image)
+  metaKeywords       String?  @map("meta_keywords") // SEO keywords (comma-separated)
+  metaAuthor         String?  @map("meta_author") // Website author/owner name
   
   // Social Media Links
   instagramUrl       String?  @map("instagram_url") // Instagram profile URL

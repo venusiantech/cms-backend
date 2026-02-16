@@ -375,7 +375,7 @@ router.put(
  * /websites/{id}/metadata:
  *   put:
  *     tags: [Websites]
- *     summary: Update website metadata (title, description, image for social sharing)
+ *     summary: Update website SEO metadata (title, description, image, keywords, author)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -393,10 +393,19 @@ router.put(
  *             properties:
  *               metaTitle:
  *                 type: string
+ *                 description: SEO title (50-60 characters recommended)
  *               metaDescription:
  *                 type: string
+ *                 description: SEO description (150-160 characters recommended)
  *               metaImage:
  *                 type: string
+ *                 description: Social sharing image URL
+ *               metaKeywords:
+ *                 type: string
+ *                 description: SEO keywords (comma-separated)
+ *               metaAuthor:
+ *                 type: string
+ *                 description: Website author/owner name
  *     responses:
  *       200:
  *         description: Metadata updated
@@ -405,6 +414,11 @@ router.put(
   '/:id/metadata',
   validate([
     param('id').isUUID().withMessage('Invalid website ID'),
+    body('metaTitle').optional().isString(),
+    body('metaDescription').optional().isString(),
+    body('metaImage').optional().isString(),
+    body('metaKeywords').optional().isString(),
+    body('metaAuthor').optional().isString(),
   ]),
   asyncHandler(async (req: AuthRequest, res) => {
     const website = await websitesService.updateMetadata(

@@ -106,6 +106,8 @@ export class PublicService {
         metaTitle: website.metaTitle,
         metaDescription: website.metaDescription,
         metaImage: website.metaImage,
+        metaKeywords: website.metaKeywords,
+        metaAuthor: website.metaAuthor,
         instagramUrl: website.instagramUrl,
         facebookUrl: website.facebookUrl,
         twitterUrl: website.twitterUrl,
@@ -179,5 +181,70 @@ export class PublicService {
       message: 'Thank you for contacting us! We will get back to you soon.',
       leadId: lead.id,
     };
+  }
+
+  async getRobotsTxt(domain: string) {
+    if (!domain) {
+      throw new AppError('Domain parameter is required', 400);
+    }
+
+    console.log(`🤖 Generating robots.txt for: ${domain}`);
+
+    const cleanDomain = domain.replace('.local', '').replace('.jaal.com', '');
+
+    // Try to find website
+    let website = await prisma.website.findFirst({
+      where: { subdomain: cleanDomain },
+      include: { domain: true },
+    });
+
+    if (!website) {
+      let domainData = await this.domainsService.findByDomainName(cleanDomain);
+
+      if (!domainData && !cleanDomain.includes('.')) {
+        domainData = await this.domainsService.findByDomainName(`${cleanDomain}.com`);
+      }
+
+      if (domainData && domainData.website) {
+        website = await prisma.website.findUnique({
+          where: { id: domainData.website.id },
+          include: { domain: true },
+        });
+      }
+    }
+
+    if (!website) {
+      console.log(`   ❌ Website not found for: ${domain}`);
+      // Return default robots.txt even if website not found
+      return `# Robots.txt for ${domain}
+# Website not configured
+
+User-agent: *
+Disallow: /`;
+    }
+
+    // Generate dynamic robots.txt based on website
+    const siteUrl = `https://${domain}`;
+    
+    const robotsTxt = `# Robots.txt for ${domain}
+# Generated automatically by Domain CMS
+
+User-agent: *
+Allow: /
+
+# Sitemaps
+Sitemap: ${siteUrl}/sitemap.xml
+
+# Crawl delay (optional)
+Crawl-delay: 1
+
+# Disallow admin/private paths (if any)
+Disallow: /api/
+Disallow: /admin/
+`;
+
+    console.log(`✅ Robots.txt generated for: ${domain}`);
+    
+    return robotsTxt;
   }
 }

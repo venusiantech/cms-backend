@@ -77,4 +77,37 @@ router.post(
   })
 );
 
+/**
+ * @swagger
+ * /public/robots.txt:
+ *   get:
+ *     tags: [Public]
+ *     summary: Get robots.txt for a specific domain (Public)
+ *     parameters:
+ *       - in: query
+ *         name: domain
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: example.com
+ *     responses:
+ *       200:
+ *         description: Robots.txt content
+ *         content:
+ *           text/plain:
+ *             schema:
+ *               type: string
+ */
+router.get(
+  '/robots.txt',
+  validate([
+    query('domain').isString().notEmpty().withMessage('Domain parameter is required'),
+  ]),
+  asyncHandler(async (req, res) => {
+    const robotsTxt = await publicService.getRobotsTxt(req.query.domain as string);
+    res.setHeader('Content-Type', 'text/plain');
+    res.send(robotsTxt);
+  })
+);
+
 export default router;

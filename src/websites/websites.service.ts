@@ -18,6 +18,8 @@ interface UpdateWebsiteMetadataDto {
   metaTitle?: string;
   metaDescription?: string;
   metaImage?: string;
+  metaKeywords?: string;
+  metaAuthor?: string;
 }
 
 interface UpdateSocialMediaDto {
@@ -210,6 +212,8 @@ export class WebsitesService {
     if (dto.metaTitle !== undefined) updateData.metaTitle = dto.metaTitle;
     if (dto.metaDescription !== undefined) updateData.metaDescription = dto.metaDescription;
     if (dto.metaImage !== undefined) updateData.metaImage = dto.metaImage;
+    if (dto.metaKeywords !== undefined) updateData.metaKeywords = dto.metaKeywords;
+    if (dto.metaAuthor !== undefined) updateData.metaAuthor = dto.metaAuthor;
 
     return prisma.website.update({
       where: { id: websiteId },
