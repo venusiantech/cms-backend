@@ -153,6 +153,9 @@ export class AiService {
         {
           topic: title,
           includeResearch: true,
+          articleType: 'Feature Article',
+          autoDetectType: false,
+          depth: 8,
         },
         {
           headers: {
@@ -390,6 +393,9 @@ export class AiService {
         {
           topic: processedPrompt,
           includeResearch: true,
+          articleType: 'Feature Article',
+          autoDetectType: false,
+          depth: 8,
         },
         {
           headers: {
