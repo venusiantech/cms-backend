@@ -155,7 +155,6 @@ export class AiService {
           includeResearch: true,
           articleType: 'Feature Article',
           autoDetectType: false,
-          depth: 8,
         },
         {
           headers: {
@@ -395,7 +394,6 @@ export class AiService {
           includeResearch: true,
           articleType: 'Feature Article',
           autoDetectType: false,
-          depth: 8,
         },
         {
           headers: {
