@@ -38,7 +38,9 @@ router.post(
     body('domainName')
       .isString()
       .notEmpty()
-      .withMessage('Domain name is required'),
+      .withMessage('Domain name is required')
+      .matches(/^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$/)
+      .withMessage('Invalid domain format. Must include a valid TLD (e.g., example.com)'),
   ]),
   asyncHandler(async (req: AuthRequest, res) => {
     const domain = await domainsService.create(req.user!.id, req.body);
@@ -228,6 +230,37 @@ router.get(
   validate([param('id').isUUID().withMessage('Invalid domain ID')]),
   asyncHandler(async (req: AuthRequest, res) => {
     const result = await domainsService.checkDnsStatus(
+      req.params.id,
+      req.user!.id,
+      req.user!.role
+    );
+    res.json(result);
+  })
+);
+
+/**
+ * @swagger
+ * /domains/{id}/retry-cloudflare:
+ *   post:
+ *     tags: [Domains]
+ *     summary: Retry Cloudflare DNS zone creation for failed domains
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Cloudflare setup completed
+ */
+router.post(
+  '/:id/retry-cloudflare',
+  validate([param('id').isUUID().withMessage('Invalid domain ID')]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const result = await domainsService.retryCloudflareSetup(
       req.params.id,
       req.user!.id,
       req.user!.role

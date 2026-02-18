@@ -44,9 +44,15 @@ export class DomainsService {
 
     // Call Cloudflare API to create DNS zone
     console.log(`\n🚀 Creating domain: ${dto.domainName}`);
-    const cloudflareResult = await this.cloudflareService.addDnsZone(
-      dto.domainName
-    );
+    let cloudflareResult;
+    try {
+      cloudflareResult = await this.cloudflareService.addDnsZone(
+        dto.domainName
+      );
+    } catch (error: any) {
+      // Pass through specific Cloudflare errors (like invalid domain)
+      throw new AppError(error.message, 400);
+    }
 
     // Generate subdomain for the website
     const randomString = Math.random().toString(36).substring(2, 6);
@@ -330,6 +336,64 @@ export class DomainsService {
     }
 
     throw new AppError('Failed to check DNS status', 500);
+  }
+
+  async retryCloudflareSetup(id: string, userId: string, userRole: string) {
+    // Fetch domain to verify ownership
+    const domain = await prisma.domain.findUnique({
+      where: { id },
+      include: { user: true },
+    });
+
+    if (!domain) {
+      throw new AppError('Domain not found', 404);
+    }
+
+    // Verify ownership
+    if (userRole !== 'SUPER_ADMIN' && domain.userId !== userId) {
+      throw new AppError('Not authorized to manage this domain', 403);
+    }
+
+    // Check if already has Cloudflare zone
+    if (domain.cloudflareZoneId) {
+      throw new AppError('Domain already has Cloudflare zone configured', 400);
+    }
+
+    console.log(
+      `\n🔄 Retrying Cloudflare setup for: ${domain.domainName}`
+    );
+
+    // Attempt to create DNS zone
+    let cloudflareResult;
+    try {
+      cloudflareResult = await this.cloudflareService.addDnsZone(
+        domain.domainName
+      );
+    } catch (error: any) {
+      // Pass through specific Cloudflare errors (like invalid domain)
+      throw new AppError(error.message, 400);
+    }
+
+    if (!cloudflareResult) {
+      throw new AppError(
+        'Failed to create Cloudflare DNS zone. Please check your Cloudflare credentials or domain format.',
+        500
+      );
+    }
+
+    // Update domain with Cloudflare data
+    const updated = await prisma.domain.update({
+      where: { id },
+      data: {
+        cloudflareZoneId: cloudflareResult.zoneId,
+        cloudflareStatus: cloudflareResult.status,
+        nameServers: cloudflareResult.nameServers,
+      },
+    });
+
+    console.log(`✅ Cloudflare setup completed for: ${domain.domainName}`);
+
+    return this.transformDomainResponse(updated);
   }
 
   async deployWorkerDomains(id: string, userId: string, userRole: string) {

@@ -84,8 +84,17 @@ export class CloudflareService {
       console.error('❌ Failed to create Cloudflare DNS zone:', error.message);
       if (error.response?.data) {
         console.error('   Error details:', error.response.data);
+        
+        // Check for specific Cloudflare errors
+        const errors = error.response.data.errors || [];
+        const invalidDomainError = errors.find((e: any) => e.code === 1002);
+        
+        if (invalidDomainError) {
+          // Throw specific error for invalid domain format
+          throw new Error('Invalid domain format. Domain must include a valid extension (e.g., example.com, myblog.net)');
+        }
       }
-      // Don't throw error, just return null to continue domain creation
+      // Don't throw error for other cases, just return null to continue domain creation
       return null;
     }
   }
