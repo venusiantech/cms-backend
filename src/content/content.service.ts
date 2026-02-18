@@ -152,14 +152,31 @@ export class ContentService {
     }
 
     // Get domain context
-    const domainName = section.page.website.domain.domainName;
+    const domain = section.page.website.domain;
+    const domainName = domain.domainName;
     const domainTopic = domainName.split('.')[0].replace(/-/g, ' ');
 
-    const titlePrompt = `Generate professional blog post titles about ${domainTopic}`;
-    console.log(`📝 Generating title with prompt: ${titlePrompt}`);
+    // Build topic with all available context
+    let titleTopic: string = domainTopic;
+    
+    // Add user description if provided
+    if (domain.userDescription) {
+      titleTopic = `${domainTopic} - ${domain.userDescription}`;
+      console.log(`📝 Using user description: ${domain.userDescription}`);
+    }
+    
+    // Add selected meaning if provided
+    if (domain.selectedMeaning) {
+      titleTopic = domain.userDescription 
+        ? `${titleTopic} (${domain.selectedMeaning})`
+        : `${domainTopic} - ${domain.selectedMeaning}`;
+      console.log(`📝 Using context: ${domain.selectedMeaning}`);
+    }
+
+    console.log(`📝 Generating title with topic: ${titleTopic}`);
 
     // Generate new title
-    const newTitles = await this.aiService.generateTitle(titlePrompt, 1);
+    const newTitles = await this.aiService.generateTitle(titleTopic, 1);
     console.log(`✅ New title generated: ${newTitles[0]}`);
 
     // Update title block

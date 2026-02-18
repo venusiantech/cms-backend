@@ -11,6 +11,7 @@ interface CreateDomainDto {
 interface UpdateDomainDto {
   status?: string;
   selectedMeaning?: string;
+  userDescription?: string;
 }
 
 export class DomainsService {
@@ -199,6 +200,9 @@ export class DomainsService {
         ...(dto.status && { status: dto.status as DomainStatus }),
         ...(dto.selectedMeaning !== undefined && {
           selectedMeaning: dto.selectedMeaning,
+        }),
+        ...(dto.userDescription !== undefined && {
+          userDescription: dto.userDescription,
         }),
       },
     });

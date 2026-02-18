@@ -103,12 +103,13 @@ export async function processGenerateWebsite(job: Job<WebsiteGenerationJob>) {
     console.log(`✅ Home page created`);
     await job.progress(40);
 
-    // Generate content with selected meaning context
+    // Generate content with selected meaning context and user description
     await generatePageContent(
       homePage.id,
       domain.domainName,
       job,
-      domain.selectedMeaning || undefined
+      domain.selectedMeaning || undefined,
+      domain.userDescription || undefined
     );
 
     await job.progress(90);
@@ -210,13 +211,21 @@ export async function processGenerateMoreBlogs(
       .split('.')[0]
       .replace(/-/g, ' ');
 
-    // Create topic for title generation (just the topic, not instructions)
-    let titleTopic: string;
+    // Create topic for title generation with all available context
+    let titleTopic: string = domainTopic;
+    
+    // Add user description if provided
+    if (website.domain.userDescription) {
+      titleTopic = `${domainTopic} - ${website.domain.userDescription}`;
+      console.log(`📝 Using user description: ${website.domain.userDescription}`);
+    }
+    
+    // Add selected meaning if provided
     if (website.domain.selectedMeaning) {
-      titleTopic = `${domainTopic} - ${website.domain.selectedMeaning}`;
+      titleTopic = website.domain.userDescription 
+        ? `${titleTopic} (${website.domain.selectedMeaning})`
+        : `${domainTopic} - ${website.domain.selectedMeaning}`;
       console.log(`📝 Using context: ${website.domain.selectedMeaning}`);
-    } else {
-      titleTopic = domainTopic;
     }
 
     console.log(`🔤 Generating ${quantity} new blog title(s)...`);
@@ -300,20 +309,29 @@ async function generatePageContent(
   pageId: string,
   domainName: string,
   job: Job,
-  selectedMeaning?: string
+  selectedMeaning?: string,
+  userDescription?: string
 ) {
   console.log(`\n🎨 Generating content for ${domainName}...`);
 
   // Step 1: Generate 3 blog titles
   const domainTopic = domainName.split('.')[0].replace(/-/g, ' ');
 
-  // Create topic for title generation (just the topic, not instructions)
-  let titleTopic: string;
+  // Create topic for title generation with all available context
+  let titleTopic: string = domainTopic;
+  
+  // Add user description if provided
+  if (userDescription) {
+    titleTopic = `${domainTopic} - ${userDescription}`;
+    console.log(`📝 Using user description: ${userDescription}`);
+  }
+  
+  // Add selected meaning if provided
   if (selectedMeaning) {
-    titleTopic = `${domainTopic} - ${selectedMeaning}`;
+    titleTopic = userDescription 
+      ? `${titleTopic} (${selectedMeaning})`
+      : `${domainTopic} - ${selectedMeaning}`;
     console.log(`📝 Using context: ${selectedMeaning}`);
-  } else {
-    titleTopic = domainTopic;
   }
 
   console.log(`🔤 Generating 3 blog titles...`);

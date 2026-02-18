@@ -123,6 +123,8 @@ router.get(
  *                 enum: [PENDING, ACTIVE]
  *               selectedMeaning:
  *                 type: string
+ *               userDescription:
+ *                 type: string
  *     responses:
  *       200:
  *         description: Domain updated

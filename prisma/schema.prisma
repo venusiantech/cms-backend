@@ -41,6 +41,7 @@ model Domain {
   domainName        String       @unique @map("domain_name")
   status            DomainStatus @default(PENDING)
   selectedMeaning   String?      @map("selected_meaning") @db.Text // Stores user's selected meaning/context
+  userDescription   String?      @map("user_description") @db.Text // User's custom description about what the domain is about
   cloudflareZoneId  String?      @map("cloudflare_zone_id") // Cloudflare Zone ID
   cloudflareStatus  String?      @map("cloudflare_status") // pending, active, etc.
   nameServers       String[]     @map("name_servers") @default([]) // Array of nameservers
