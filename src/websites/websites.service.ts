@@ -28,6 +28,11 @@ interface UpdateSocialMediaDto {
   twitterUrl?: string;
 }
 
+interface UpdateContactInfoDto {
+  contactEmail?: string;
+  contactPhone?: string;
+}
+
 export class WebsitesService {
   /**
    * Get all available templates
@@ -249,6 +254,40 @@ export class WebsitesService {
     if (dto.instagramUrl !== undefined) updateData.instagramUrl = dto.instagramUrl || null;
     if (dto.facebookUrl !== undefined) updateData.facebookUrl = dto.facebookUrl || null;
     if (dto.twitterUrl !== undefined) updateData.twitterUrl = dto.twitterUrl || null;
+
+    return prisma.website.update({
+      where: { id: websiteId },
+      data: updateData,
+    });
+  }
+
+  /**
+   * Update website contact information
+   */
+  async updateContactInfo(
+    websiteId: string,
+    userId: string,
+    userRole: string,
+    dto: UpdateContactInfoDto
+  ) {
+    // Get website with domain to check ownership
+    const website = await prisma.website.findUnique({
+      where: { id: websiteId },
+      include: { domain: true },
+    });
+
+    if (!website) {
+      throw new AppError('Website not found', 404);
+    }
+
+    // Check ownership (unless super admin)
+    if (userRole !== 'SUPER_ADMIN' && website.domain.userId !== userId) {
+      throw new AppError('Access denied', 403);
+    }
+
+    const updateData: any = {};
+    if (dto.contactEmail !== undefined) updateData.contactEmail = dto.contactEmail || null;
+    if (dto.contactPhone !== undefined) updateData.contactPhone = dto.contactPhone || null;
 
     return prisma.website.update({
       where: { id: websiteId },

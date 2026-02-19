@@ -111,6 +111,8 @@ export class PublicService {
         instagramUrl: website.instagramUrl,
         facebookUrl: website.facebookUrl,
         twitterUrl: website.twitterUrl,
+        contactEmail: website.contactEmail,
+        contactPhone: website.contactPhone,
       },
       pages: website.pages.map((page) => ({
         id: page.id,

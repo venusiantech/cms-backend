@@ -88,6 +88,10 @@ model Website {
   facebookUrl        String?  @map("facebook_url") // Facebook page URL
   twitterUrl         String?  @map("twitter_url") // Twitter/X profile URL
   
+  // Contact Information (for display on website)
+  contactEmail       String?  @map("contact_email") // Contact email to display on website
+  contactPhone       String?  @map("contact_phone") // Contact phone to display on website
+  
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
   

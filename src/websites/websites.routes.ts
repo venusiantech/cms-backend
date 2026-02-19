@@ -484,4 +484,50 @@ router.put(
   })
 );
 
+/**
+ * @swagger
+ * /websites/{id}/contact-info:
+ *   put:
+ *     tags: [Websites]
+ *     summary: Update website contact information (email and phone)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               contactEmail:
+ *                 type: string
+ *               contactPhone:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Contact information updated
+ */
+router.put(
+  '/:id/contact-info',
+  validate([
+    param('id').isUUID().withMessage('Invalid website ID'),
+    body('contactEmail').optional().isEmail().withMessage('Invalid email format'),
+    body('contactPhone').optional().isString().withMessage('Invalid phone number'),
+  ]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const website = await websitesService.updateContactInfo(
+      req.params.id,
+      req.user!.id,
+      req.user!.role,
+      req.body
+    );
+    res.json(website);
+  })
+);
+
 export default router;
