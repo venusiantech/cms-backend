@@ -530,4 +530,53 @@ router.put(
   })
 );
 
+/**
+ * @swagger
+ * /websites/{id}/google-analytics:
+ *   put:
+ *     tags: [Websites]
+ *     summary: Update Google Analytics tracking ID
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               googleAnalyticsId:
+ *                 type: string
+ *                 example: G-XXXXXXXXXX
+ *     responses:
+ *       200:
+ *         description: Google Analytics ID updated
+ */
+router.put(
+  '/:id/google-analytics',
+  validate([
+    param('id').isUUID().withMessage('Invalid website ID'),
+    body('googleAnalyticsId')
+      .optional()
+      .isString()
+      .withMessage('Invalid Google Analytics ID')
+      .matches(/^(G-[A-Z0-9]{10}|UA-[0-9]+-[0-9]+)?$/)
+      .withMessage('Google Analytics ID must be in format G-XXXXXXXXXX or UA-XXXXXX-X'),
+  ]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const website = await websitesService.updateGoogleAnalytics(
+      req.params.id,
+      req.user!.id,
+      req.user!.role,
+      req.body
+    );
+    res.json(website);
+  })
+);
+
 export default router;

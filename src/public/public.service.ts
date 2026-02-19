@@ -113,6 +113,7 @@ export class PublicService {
         twitterUrl: website.twitterUrl,
         contactEmail: website.contactEmail,
         contactPhone: website.contactPhone,
+        googleAnalyticsId: website.googleAnalyticsId,
       },
       pages: website.pages.map((page) => ({
         id: page.id,
