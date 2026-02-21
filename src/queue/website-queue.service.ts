@@ -49,7 +49,7 @@ export class WebsiteQueueService {
         type: 'exponential',
         delay: 5000, // Increased from 2s to 5s
       },
-      timeout: 180000, // 3 minute timeout per attempt
+      timeout: 1200000, // 20 minute timeout per attempt (3 blogs × ~5 min each + images)
       removeOnComplete: false, // Keep completed jobs for status checking
       removeOnFail: false, // Keep failed jobs for debugging
     });
@@ -95,7 +95,7 @@ export class WebsiteQueueService {
           type: 'exponential',
           delay: 5000, // Increased from 2s to 5s
         },
-        timeout: 300000, // 5 minute timeout per attempt (increased for larger quantities)
+        timeout: 1200000, // 20 minute timeout per attempt (3 blogs × ~5 min each + images)
         removeOnComplete: false,
         removeOnFail: false,
       }

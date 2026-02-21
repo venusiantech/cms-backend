@@ -161,7 +161,7 @@ export class AiService {
             Authorization: `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json',
           },
-          timeout: 120000, // 2 minutes timeout
+          timeout: 300000, // 5 minutes timeout (research-blog-writer is slow)
         }
       );
 
@@ -400,7 +400,7 @@ export class AiService {
             Authorization: `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json',
           },
-          timeout: 120000,
+          timeout: 300000, // 5 minutes timeout
         }
       );
 
