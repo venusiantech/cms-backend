@@ -126,10 +126,12 @@ export class PublicService {
           id: section.id,
           type: section.sectionType,
           order: section.orderIndex,
+          createdAt: section.createdAt,
           blocks: section.contentBlocks.map((block) => ({
             id: block.id,
             type: block.blockType,
             content: JSON.parse(block.contentJson),
+            createdAt: block.createdAt,
           })),
         })),
       })),
