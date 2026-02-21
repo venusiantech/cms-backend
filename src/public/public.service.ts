@@ -37,7 +37,7 @@ export class PublicService {
           orderBy: { slug: 'asc' },
           include: {
             sections: {
-              orderBy: { orderIndex: 'asc' },
+              orderBy: { orderIndex: 'desc' }, // latest articles first
               include: {
                 contentBlocks: {
                   orderBy: { id: 'asc' },
@@ -69,7 +69,7 @@ export class PublicService {
               orderBy: { slug: 'asc' },
               include: {
                 sections: {
-                  orderBy: { orderIndex: 'asc' },
+                  orderBy: { orderIndex: 'desc' }, // latest articles first
                   include: {
                     contentBlocks: {
                       orderBy: { id: 'asc' },
