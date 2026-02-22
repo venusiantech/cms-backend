@@ -45,6 +45,7 @@ model Domain {
   cloudflareZoneId  String?      @map("cloudflare_zone_id") // Cloudflare Zone ID
   cloudflareStatus  String?      @map("cloudflare_status") // pending, active, etc.
   nameServers       String[]     @map("name_servers") @default([]) // Array of nameservers
+  workersDeployed   Boolean      @default(false) @map("workers_deployed") // True after worker domains have been deployed
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")
   

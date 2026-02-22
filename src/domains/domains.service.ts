@@ -467,6 +467,14 @@ export class DomainsService {
         : `⚠️  Worker domains and KV mappings partially deployed`
     );
 
+    // Mark workers as deployed in the database (even partial success counts)
+    if (result1.success || result2.success) {
+      await prisma.domain.update({
+        where: { id },
+        data: { workersDeployed: true },
+      });
+    }
+
     return {
       success: allSuccess,
       deployed: [
