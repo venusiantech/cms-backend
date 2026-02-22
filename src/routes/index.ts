@@ -7,6 +7,7 @@ import contentRoutes from '../content/content.routes';
 import leadsRoutes from '../leads/leads.routes';
 import aiPromptsRoutes from '../ai-prompts/ai-prompts.routes';
 import publicRoutes from '../public/public.routes';
+import adminRoutes from '../admin/index.routes';
 
 const router = Router();
 
@@ -16,7 +17,10 @@ router.use('/public', publicRoutes);
 // Authentication routes
 router.use('/auth', authRoutes);
 
-// Protected routes (require authentication)
+// Admin Portal routes (SUPER_ADMIN only) - all under /api/admin
+router.use('/admin', adminRoutes);
+
+// Protected routes (require authentication) - used by user portal
 router.use('/users', usersRoutes);
 router.use('/domains', domainsRoutes);
 router.use('/websites', websitesRoutes);
