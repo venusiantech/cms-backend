@@ -144,6 +144,35 @@ export class StorageService {
   }
 
   /**
+   * Upload a logo image (private ACL) and return a long-lived signed URL (1 year).
+   * @param buffer - Image buffer
+   * @param contentType - MIME type (e.g., 'image/png')
+   * @param fileName - Optional custom filename
+   * @returns { signedUrl, key } - Signed URL (1 year expiry) and S3 key (for future deletion/refresh)
+   */
+  async uploadLogoPublic(buffer: Buffer, contentType: string, fileName?: string): Promise<{ publicUrl: string; key: string }> {
+    const timestamp = Date.now();
+    const uuid = uuidv4();
+    const extension = contentType.split('/')[1]?.split(';')[0] || 'png';
+    const key = fileName || `logos/${timestamp}-${uuid}.${extension}`;
+
+    const params = {
+      Bucket: this.bucketName,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+      ACL: 'private',
+    };
+
+    await this.s3.upload(params).promise();
+
+    // Generate signed URL — max 7 days (604800s) enforced by AWS Signature V4 / Tigris
+    const signedUrl = await this.getSignedUrl(key, 604800);
+
+    return { publicUrl: signedUrl, key };
+  }
+
+  /**
    * Check if S3 is configured
    * @returns true if credentials and bucket are configured
    */

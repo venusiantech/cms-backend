@@ -96,6 +96,11 @@ model Website {
   // Analytics
   googleAnalyticsId  String?  @map("google_analytics_id") // Google Analytics Measurement ID (G-XXXXXXXXXX)
   
+  // Logo
+  websiteLogo        String?  @map("website_logo") // Public URL of the uploaded logo
+  websiteLogoKey     String?  @map("website_logo_key") // S3 key for deletion when replacing logo
+  logoDisplayMode    String   @default("logo_only") @map("logo_display_mode") // "logo_only" | "text_only" | "both"
+  
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
   

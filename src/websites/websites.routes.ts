@@ -5,6 +5,19 @@ import { asyncHandler } from '../middleware/error.middleware';
 import { authenticate, AuthRequest } from '../middleware/auth.middleware';
 import { WebsitesService } from './websites.service';
 import { WebsiteQueueService } from '../queue/website-queue.service';
+import multer from 'multer';
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB max
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'));
+    }
+  },
+});
 
 const router = Router();
 const websitesService = new WebsitesService();
@@ -576,6 +589,57 @@ router.put(
       req.body
     );
     res.json(website);
+  })
+);
+
+// Logo display mode
+router.put(
+  '/:id/logo-display-mode',
+  validate([
+    param('id').isUUID().withMessage('Invalid website ID'),
+    body('logoDisplayMode')
+      .isIn(['logo_only', 'text_only', 'both'])
+      .withMessage('logoDisplayMode must be logo_only, text_only, or both'),
+  ]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const website = await websitesService.updateLogoDisplayMode(
+      req.params.id,
+      req.user!.id,
+      req.user!.role,
+      req.body.logoDisplayMode
+    );
+    res.json({ logoDisplayMode: (website as any).logoDisplayMode });
+  })
+);
+
+// Logo upload
+router.post(
+  '/:id/logo',
+  validate([param('id').isUUID().withMessage('Invalid website ID')]),
+  upload.single('logo'),
+  asyncHandler(async (req: AuthRequest, res) => {
+    if (!req.file) {
+      res.status(400).json({ message: 'No image file provided' });
+      return;
+    }
+    const website = await websitesService.uploadLogo(
+      req.params.id,
+      req.user!.id,
+      req.user!.role,
+      req.file.buffer,
+      req.file.mimetype
+    );
+    res.json({ websiteLogo: (website as any).websiteLogo });
+  })
+);
+
+// Logo delete
+router.delete(
+  '/:id/logo',
+  validate([param('id').isUUID().withMessage('Invalid website ID')]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    await websitesService.deleteLogo(req.params.id, req.user!.id, req.user!.role);
+    res.json({ message: 'Logo deleted successfully' });
   })
 );
 

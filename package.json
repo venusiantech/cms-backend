@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.8.0",
+    "@types/multer": "^2.0.0",
     "aws-sdk": "^2.1693.0",
     "axios": "^1.13.5",
     "bcrypt": "^5.1.1",
@@ -32,6 +33,7 @@
     "ioredis": "^5.8.2",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
+    "multer": "^2.0.2",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.0",
     "uuid": "^13.0.0"

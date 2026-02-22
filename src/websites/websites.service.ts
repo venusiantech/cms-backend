@@ -1,5 +1,6 @@
 import prisma from '../config/prisma';
 import { AppError } from '../middleware/error.middleware';
+import { StorageService } from '../storage/storage.service';
 
 interface UpdateAdsDto {
   adsEnabled?: boolean;
@@ -34,6 +35,7 @@ interface UpdateContactInfoDto {
 }
 
 export class WebsitesService {
+  private storageService = new StorageService();
   /**
    * Get all available templates
    */
@@ -324,6 +326,92 @@ export class WebsitesService {
       data: {
         googleAnalyticsId: dto.googleAnalyticsId || null,
       },
+    });
+  }
+
+  /**
+   * Update logo display mode: "logo_only" | "text_only" | "both"
+   */
+  async updateLogoDisplayMode(websiteId: string, userId: string, userRole: string, mode: string) {
+    const website = await prisma.website.findUnique({
+      where: { id: websiteId },
+      include: { domain: true },
+    });
+    if (!website) throw new AppError('Website not found', 404);
+    if (userRole !== 'SUPER_ADMIN' && website.domain.userId !== userId) {
+      throw new AppError('Access denied', 403);
+    }
+    return prisma.website.update({
+      where: { id: websiteId },
+      data: { logoDisplayMode: mode },
+    });
+  }
+
+  /**
+   * Upload website logo: delete old logo from S3 if exists, upload new one, save public URL
+   */
+  async uploadLogo(
+    websiteId: string,
+    userId: string,
+    userRole: string,
+    fileBuffer: Buffer,
+    contentType: string
+  ) {
+    const website = await prisma.website.findUnique({
+      where: { id: websiteId },
+      include: { domain: true },
+    });
+
+    if (!website) throw new AppError('Website not found', 404);
+    if (userRole !== 'SUPER_ADMIN' && website.domain.userId !== userId) {
+      throw new AppError('Access denied', 403);
+    }
+
+    // Delete old logo from S3 if present
+    if (website.websiteLogoKey) {
+      try {
+        await this.storageService.deleteFromS3(website.websiteLogoKey);
+        console.log(`🗑️  Deleted old logo: ${website.websiteLogoKey}`);
+      } catch (err) {
+        console.warn('⚠️  Could not delete old logo from S3 (continuing):', err);
+      }
+    }
+
+    // Upload new logo with public-read ACL
+    const { publicUrl, key } = await this.storageService.uploadLogoPublic(fileBuffer, contentType);
+    console.log(`✅ Logo uploaded: ${publicUrl}`);
+
+    return prisma.website.update({
+      where: { id: websiteId },
+      data: { websiteLogo: publicUrl, websiteLogoKey: key },
+    });
+  }
+
+  /**
+   * Delete website logo from S3 and clear the DB field
+   */
+  async deleteLogo(websiteId: string, userId: string, userRole: string) {
+    const website = await prisma.website.findUnique({
+      where: { id: websiteId },
+      include: { domain: true },
+    });
+
+    if (!website) throw new AppError('Website not found', 404);
+    if (userRole !== 'SUPER_ADMIN' && website.domain.userId !== userId) {
+      throw new AppError('Access denied', 403);
+    }
+
+    if (website.websiteLogoKey) {
+      try {
+        await this.storageService.deleteFromS3(website.websiteLogoKey);
+      } catch (err) {
+        console.warn('⚠️  Could not delete logo from S3:', err);
+      }
+    }
+
+    return prisma.website.update({
+      where: { id: websiteId },
+      data: { websiteLogo: null, websiteLogoKey: null },
     });
   }
 }

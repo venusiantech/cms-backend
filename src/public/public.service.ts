@@ -114,6 +114,8 @@ export class PublicService {
         contactEmail: website.contactEmail,
         contactPhone: website.contactPhone,
         googleAnalyticsId: website.googleAnalyticsId,
+        websiteLogo: website.websiteLogo,
+        logoDisplayMode: website.logoDisplayMode,
       },
       pages: website.pages.map((page) => ({
         id: page.id,
