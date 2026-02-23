@@ -422,7 +422,8 @@ export class DomainsService {
       throw new AppError('No website found for this domain', 400);
     }
 
-    const subdomainValue = `${domain.website.subdomain}.jaal.com`;
+    const platformDomain = process.env.PLATFORM_DOMAIN?.split(',')[0].trim() || 'fastofy.com';
+    const subdomainValue = `${domain.website.subdomain}.${platformDomain}`;
 
     console.log(
       `\n🚀 Deploying Cloudflare Workers for domain: ${domain.domainName}`
