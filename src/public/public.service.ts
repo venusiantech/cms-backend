@@ -24,8 +24,12 @@ export class PublicService {
 
     console.log(`🔍 Looking up website for: ${domain}`);
 
-    // Remove platform suffixes
-    let cleanDomain = domain.replace('.local', '').replace('.jaal.com', '');
+    // Remove platform suffixes - supports comma-separated list e.g. "fastofy.com,jaal.com"
+    const platformDomains = (process.env.PLATFORM_DOMAIN || 'fastofy.com').split(',').map(d => d.trim());
+    let cleanDomain = domain.replace('.local', '');
+    for (const pd of platformDomains) {
+      cleanDomain = cleanDomain.replace(`.${pd}`, '');
+    }
     console.log(`   Cleaned domain: ${cleanDomain}`);
 
     // First, try to find by subdomain
@@ -145,7 +149,11 @@ export class PublicService {
 
     console.log(`📧 Contact form submission from: ${domain}`);
 
-    const cleanDomain = domain.replace('.local', '').replace('.jaal.com', '');
+    const platformDomains = (process.env.PLATFORM_DOMAIN || 'fastofy.com').split(',').map(d => d.trim());
+    let cleanDomain = domain.replace('.local', '');
+    for (const pd of platformDomains) {
+      cleanDomain = cleanDomain.replace(`.${pd}`, '');
+    }
 
     let website = await prisma.website.findFirst({
       where: { subdomain: cleanDomain },
@@ -197,7 +205,11 @@ export class PublicService {
 
     console.log(`🤖 Generating robots.txt for: ${domain}`);
 
-    const cleanDomain = domain.replace('.local', '').replace('.jaal.com', '');
+    const platformDomains = (process.env.PLATFORM_DOMAIN || 'fastofy.com').split(',').map(d => d.trim());
+    let cleanDomain = domain.replace('.local', '');
+    for (const pd of platformDomains) {
+      cleanDomain = cleanDomain.replace(`.${pd}`, '');
+    }
 
     // Try to find website
     let website = await prisma.website.findFirst({
