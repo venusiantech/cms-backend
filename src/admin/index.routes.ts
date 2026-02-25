@@ -6,6 +6,7 @@ import websitesRoutes from './websites/websites.routes';
 import domainsRoutes from './domains/domains.routes';
 import leadsRoutes from './leads/leads.routes';
 import statsRoutes from './stats/stats.routes';
+import storageRoutes from './storage/storage.routes';
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use('/ai-prompts', aiPromptsRoutes);
 router.use('/websites', websitesRoutes);
 router.use('/domains', domainsRoutes);
 router.use('/leads', leadsRoutes);
+router.use('/storage', storageRoutes);
 
 export default router;
