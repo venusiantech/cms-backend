@@ -99,6 +99,32 @@ export class DomainsService {
     return this.transformDomainResponse(domain!);
   }
 
+  async search(userId: string, userRole: string, query: string) {
+    const q = query.trim().toLowerCase();
+
+    const whereClause = {
+      domainName: {
+        contains: q,
+        mode: 'insensitive' as const,
+      },
+      ...(userRole !== 'SUPER_ADMIN' && { userId }),
+    };
+
+    const domains = await prisma.domain.findMany({
+      where: whereClause,
+      include: {
+        ...(userRole === 'SUPER_ADMIN' && {
+          user: { select: { id: true, email: true } },
+        }),
+        website: { include: { pages: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+
+    return domains.map((d) => this.transformDomainResponse(d));
+  }
+
   async findAll(userId: string, userRole: string) {
     // Super admin can see all domains
     if (userRole === 'SUPER_ADMIN') {

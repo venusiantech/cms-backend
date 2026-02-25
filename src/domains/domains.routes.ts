@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { body, param } from 'express-validator';
+import { body, param, query } from 'express-validator';
 import { validate } from '../middleware/validation.middleware';
 import { asyncHandler } from '../middleware/error.middleware';
 import { authenticate, AuthRequest } from '../middleware/auth.middleware';
@@ -65,6 +65,45 @@ router.get(
   asyncHandler(async (req: AuthRequest, res) => {
     const domains = await domainsService.findAll(req.user!.id, req.user!.role);
     res.json(domains);
+  })
+);
+
+/**
+ * @swagger
+ * /domains/search:
+ *   get:
+ *     tags: [Domains]
+ *     summary: Search domains by name
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Search query (partial domain name match)
+ *     responses:
+ *       200:
+ *         description: Matching domains
+ */
+router.get(
+  '/search',
+  validate([
+    query('q')
+      .isString()
+      .notEmpty()
+      .withMessage('Search query is required')
+      .isLength({ max: 100 })
+      .withMessage('Query too long'),
+  ]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const results = await domainsService.search(
+      req.user!.id,
+      req.user!.role,
+      req.query.q as string
+    );
+    res.json(results);
   })
 );
 
