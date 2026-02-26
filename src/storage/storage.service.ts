@@ -3,6 +3,9 @@ import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { AppError } from '../middleware/error.middleware';
 
+/** Signed URL expiry: 100 years (seconds) */
+const SIGNED_URL_EXPIRY = 3155760000;
+
 /**
  * Simple S3 Storage Service (AWS SDK v2)
  * Downloads images from external URLs and uploads to our S3 bucket
@@ -43,7 +46,7 @@ export class StorageService {
    * Download image from URL and upload to S3
    * @param imageUrl - External image URL (e.g., from Aaddyy)
    * @param fileName - Custom filename (optional, will generate if not provided)
-   * @returns Signed S3 URL (valid for 7 days)
+   * @returns Signed S3 URL (valid for 100 years)
    */
   async uploadImageFromUrl(imageUrl: string, fileName?: string): Promise<string> {
     try {
@@ -75,8 +78,8 @@ export class StorageService {
 
       const result = await this.s3.upload(params).promise();
       
-      // Generate signed URL (7 days expiry)
-      const signedUrl = await this.getSignedUrl(result.Key, 604800);
+      // Generate signed URL (100 years expiry)
+      const signedUrl = await this.getSignedUrl(result.Key, SIGNED_URL_EXPIRY);
       
       return signedUrl;
     } catch (error: any) {
@@ -111,8 +114,8 @@ export class StorageService {
 
       const result = await this.s3.upload(params).promise();
       
-      // Generate signed URL (7 days)
-      const signedUrl = await this.getSignedUrl(result.Key, 604800);
+      // Generate signed URL (100 years)
+      const signedUrl = await this.getSignedUrl(result.Key, SIGNED_URL_EXPIRY);
 
       return signedUrl;
     } catch (error: any) {
@@ -124,10 +127,10 @@ export class StorageService {
   /**
    * Generate a signed URL for accessing S3 files
    * @param fileKey - S3 object key (e.g., "images/123456-uuid.png")
-   * @param expiresIn - Expiration time in seconds (default: 7 days)
+   * @param expiresIn - Expiration time in seconds (default: 100 years)
    * @returns Signed URL
    */
-  async getSignedUrl(fileKey: string, expiresIn: number = 604800): Promise<string> {
+  async getSignedUrl(fileKey: string, expiresIn: number = SIGNED_URL_EXPIRY): Promise<string> {
     try {
       const params = {
         Bucket: this.bucketName,
@@ -166,8 +169,8 @@ export class StorageService {
 
     await this.s3.upload(params).promise();
 
-    // Generate signed URL — max 7 days (604800s) enforced by AWS Signature V4 / Tigris
-    const signedUrl = await this.getSignedUrl(key, 604800);
+    // Generate signed URL (100 years)
+    const signedUrl = await this.getSignedUrl(key, SIGNED_URL_EXPIRY);
 
     return { publicUrl: signedUrl, key };
   }
