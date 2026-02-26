@@ -38,6 +38,19 @@ export const AVAILABLE_TEMPLATES: Template[] = [
       'Easy to customize',
     ],
   },
+  {
+    key: 'arclight',
+    name: 'Arclight',
+    description: 'Premium magazine-style template with multi-section layout and dark mode support',
+    previewImage: 'https://placehold.co/800x500/1a1a2e/ffffff?text=Arclight+Magazine',
+    features: [
+      'Magazine-style multi-section home page',
+      'Dark mode support built-in',
+      'Featured hero + grid post layout',
+      'Sidebar with widgets (authors, tags, categories)',
+      'Fully responsive design',
+    ],
+  },
 ];
 
 /**

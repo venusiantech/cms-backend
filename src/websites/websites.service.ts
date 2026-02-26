@@ -1,6 +1,7 @@
 import prisma from '../config/prisma';
 import { AppError } from '../middleware/error.middleware';
 import { StorageService } from '../storage/storage.service';
+import { AVAILABLE_TEMPLATES } from './templates.constant';
 
 interface UpdateAdsDto {
   adsEnabled?: boolean;
@@ -40,34 +41,7 @@ export class WebsitesService {
    * Get all available templates
    */
   async getAvailableTemplates() {
-    return [
-      {
-        key: 'modernNews',
-        name: 'Modern News',
-        description: 'A sleek news magazine layout with dynamic blog grid and featured articles',
-        previewImage: '/templateA/assets/images/modernNews.png',
-        features: [
-          'Hero section with featured article',
-          'Responsive blog grid layout',
-          'SEO-optimized structure',
-          'Contact form integration',
-          'Dynamic navbar',
-        ],
-      },
-      {
-        key: 'templateA',
-        name: 'Template A',
-        description: 'Professional business template with elegant design and modern features',
-        previewImage: '/templateA/assets/images/TemplateA.png',
-        features: [
-          'Clean and professional layout',
-          'Modern design elements',
-          'Optimized for business sites',
-          'Fully responsive design',
-          'Easy to customize',
-        ],
-      },
-    ];
+    return AVAILABLE_TEMPLATES;
   }
 
   /**
