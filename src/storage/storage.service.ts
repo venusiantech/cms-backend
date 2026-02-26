@@ -3,8 +3,8 @@ import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { AppError } from '../middleware/error.middleware';
 
-/** Signed URL expiry: 100 years (seconds) */
-const SIGNED_URL_EXPIRY = 3155760000;
+/** Signed URL expiry: 7 days (max allowed by AWS SigV4 / S3-compatible) */
+const SIGNED_URL_EXPIRY = 604800;
 
 /**
  * Simple S3 Storage Service (AWS SDK v2)
@@ -46,7 +46,7 @@ export class StorageService {
    * Download image from URL and upload to S3
    * @param imageUrl - External image URL (e.g., from Aaddyy)
    * @param fileName - Custom filename (optional, will generate if not provided)
-   * @returns Signed S3 URL (valid for 100 years)
+   * @returns Signed S3 URL (valid for 7 days)
    */
   async uploadImageFromUrl(imageUrl: string, fileName?: string): Promise<string> {
     try {
@@ -78,7 +78,7 @@ export class StorageService {
 
       const result = await this.s3.upload(params).promise();
       
-      // Generate signed URL (100 years expiry)
+      // Generate signed URL (7 days — max for SigV4)
       const signedUrl = await this.getSignedUrl(result.Key, SIGNED_URL_EXPIRY);
       
       return signedUrl;
@@ -114,7 +114,7 @@ export class StorageService {
 
       const result = await this.s3.upload(params).promise();
       
-      // Generate signed URL (100 years)
+      // Generate signed URL (7 days — max for SigV4)
       const signedUrl = await this.getSignedUrl(result.Key, SIGNED_URL_EXPIRY);
 
       return signedUrl;
@@ -127,7 +127,7 @@ export class StorageService {
   /**
    * Generate a signed URL for accessing S3 files
    * @param fileKey - S3 object key (e.g., "images/123456-uuid.png")
-   * @param expiresIn - Expiration time in seconds (default: 100 years)
+   * @param expiresIn - Expiration time in seconds (default: 7 days)
    * @returns Signed URL
    */
   async getSignedUrl(fileKey: string, expiresIn: number = SIGNED_URL_EXPIRY): Promise<string> {
@@ -169,7 +169,7 @@ export class StorageService {
 
     await this.s3.upload(params).promise();
 
-    // Generate signed URL (100 years)
+    // Generate signed URL (7 days — max for SigV4)
     const signedUrl = await this.getSignedUrl(key, SIGNED_URL_EXPIRY);
 
     return { publicUrl: signedUrl, key };
