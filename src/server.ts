@@ -42,31 +42,36 @@ const swaggerOptions = {
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
-// CORS configuration
-const allowedOrigins = [
+// CORS configuration: allow frontend, admin, and optional comma-separated ALLOWED_ORIGINS
+const allowedOrigins: string[] = [
   process.env.FRONTEND_URL || 'http://localhost:3000',
   process.env.ADMIN_PORTAL_URL || 'http://localhost:3002',
+  ...(process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean)
+    : []),
 ];
+// Also allow https/http and www variants of fastofy.com when used in production
+if (process.env.FRONTEND_URL?.includes('fastofy.com')) {
+  allowedOrigins.push('https://fastofy.com', 'https://www.fastofy.com', 'http://fastofy.com', 'http://www.fastofy.com');
+}
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl)
       if (!origin) return callback(null, true);
-
-      // Allow localhost and .local domains (for generated websites)
       if (
         allowedOrigins.indexOf(origin) !== -1 ||
         origin.includes('localhost') ||
         origin.includes('.local')
       ) {
-        callback(null, true);
-      } else {
-        // For production, allow all origins for public API endpoints
-        callback(null, true);
+        return callback(null, true);
       }
+      // Allow any origin (e.g. production frontend); credentials still require reflected origin
+      callback(null, true);
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
 
