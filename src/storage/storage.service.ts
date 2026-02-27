@@ -1,164 +1,170 @@
 import * as AWS from 'aws-sdk';
 import axios from 'axios';
+import { v2 as cloudinary } from 'cloudinary';
 import { v4 as uuidv4 } from 'uuid';
 import { AppError } from '../middleware/error.middleware';
-
-/** Signed URL expiry: 7 days (max allowed by AWS SigV4 / S3-compatible) */
-const SIGNED_URL_EXPIRY = 604800;
+import { getStorageProvider } from './storage-provider.config';
 
 /**
- * Simple S3 Storage Service (AWS SDK v2)
- * Downloads images from external URLs and uploads to our S3 bucket
+ * Storage Service: Railway (S3) or Cloudinary, selectable by admin.
  */
 export class StorageService {
   private s3: AWS.S3;
   private bucketName: string;
 
   constructor() {
-    // Support both AWS_ and S3_ prefixes for flexibility
-    this.bucketName = process.env.AWS_S3_BUCKET_NAME || 
-                       process.env.S3_BUCKET_NAME || 
-                       'neat-bottle-0mqojiahjqfx3';
-    
-    // Initialize S3 client (matching colleague's working config)
+    this.bucketName =
+      process.env.AWS_S3_BUCKET_NAME ||
+      process.env.S3_BUCKET_NAME ||
+      'neat-bottle-0mqojiahjqfx3';
+
     const s3Config: any = {
-      accessKeyId: process.env.S3_ACCESS_KEY_ID || process.env.S3_ACCESS_KEY_ID,
-      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || process.env.S3_SECRET_ACCESS_KEY,
-      region: process.env.S3_REGION || process.env.S3_REGION || 'auto',
+      accessKeyId: process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY,
+      region: process.env.S3_REGION || process.env.AWS_REGION || 'auto',
       signatureVersion: 'v4',
     };
 
-    // Add endpoint for S3-compatible storage (Tigris)
     const endpointUrl = process.env.AWS_ENDPOINT_URL || process.env.S3_ENDPOINT_URL;
     if (endpointUrl) {
       s3Config.endpoint = new AWS.Endpoint(endpointUrl);
-      s3Config.s3ForcePathStyle = true; // Required for Tigris
+      s3Config.s3ForcePathStyle = true;
     }
 
     this.s3 = new AWS.S3(s3Config);
 
-    console.log('✅ S3 Storage Service initialized');
-    console.log(`   Endpoint: ${endpointUrl}`);
-    console.log(`   Bucket: ${this.bucketName}`);
-  }
-
-  /**
-   * Download image from URL and upload to S3
-   * @param imageUrl - External image URL (e.g., from Aaddyy)
-   * @param fileName - Custom filename (optional, will generate if not provided)
-   * @returns Signed S3 URL (valid for 7 days)
-   */
-  async uploadImageFromUrl(imageUrl: string, fileName?: string): Promise<string> {
-    try {
-      // Download image
-      const response = await axios.get(imageUrl, {
-        responseType: 'arraybuffer',
-        timeout: 30000,
+    if (process.env.CLOUDINARY_URL) {
+      cloudinary.config();
+    } else if (
+      process.env.CLOUDINARY_CLOUD_NAME &&
+      process.env.CLOUDINARY_API_KEY &&
+      process.env.CLOUDINARY_API_SECRET
+    ) {
+      cloudinary.config({
+        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+        api_key: process.env.CLOUDINARY_API_KEY,
+        api_secret: process.env.CLOUDINARY_API_SECRET,
       });
+    }
 
-      const imageBuffer = Buffer.from(response.data);
-      const contentType = response.headers['content-type'] || 'image/png';
+    console.log('✅ Storage Service initialized');
+    console.log(`   Provider: ${getStorageProvider()}`);
+  }
 
-      // Generate filename if not provided
-      if (!fileName) {
-        const timestamp = Date.now();
-        const uuid = uuidv4();
-        const extension = contentType.split('/')[1]?.split(';')[0] || 'png';
-        fileName = `images/${timestamp}-${uuid}.${extension}`;
-      }
+  async uploadImageFromUrl(imageUrl: string, fileName?: string): Promise<string> {
+    if (getStorageProvider() === 'cloudinary') {
+      return this.uploadImageFromUrlCloudinary(imageUrl, fileName);
+    }
+    return this.uploadImageFromUrlS3(imageUrl, fileName);
+  }
 
-      // Upload to S3 with PRIVATE ACL
-      const params = {
-        Bucket: this.bucketName,
-        Key: fileName,
-        Body: imageBuffer,
-        ContentType: contentType,
-        ACL: 'private',
-      };
+  private async uploadImageFromUrlS3(imageUrl: string, fileName?: string): Promise<string> {
+    const response = await axios.get(imageUrl, {
+      responseType: 'arraybuffer',
+      timeout: 30000,
+    });
+    const imageBuffer = Buffer.from(response.data);
+    const contentType = response.headers['content-type'] || 'image/png';
+    if (!fileName) {
+      const timestamp = Date.now();
+      const uuid = uuidv4();
+      const extension = contentType.split('/')[1]?.split(';')[0] || 'png';
+      fileName = `images/${timestamp}-${uuid}.${extension}`;
+    }
+    const params = {
+      Bucket: this.bucketName,
+      Key: fileName,
+      Body: imageBuffer,
+      ContentType: contentType,
+      ACL: 'private',
+    };
+    const result = await this.s3.upload(params).promise();
+    return this.getSignedUrl(result.Key, 604800);
+  }
 
-      const result = await this.s3.upload(params).promise();
-      
-      // Generate signed URL (7 days — max for SigV4)
-      const signedUrl = await this.getSignedUrl(result.Key, SIGNED_URL_EXPIRY);
-      
-      return signedUrl;
+  private async uploadImageFromUrlCloudinary(imageUrl: string, fileName?: string): Promise<string> {
+    try {
+      const publicId = fileName
+        ? fileName.replace(/\.[^.]+$/, '').replace(/^images\//, '')
+        : `img-${Date.now()}-${uuidv4().slice(0, 8)}`;
+      const result = await cloudinary.uploader.upload(imageUrl, {
+        folder: 'images',
+        public_id: publicId,
+      });
+      return result.secure_url;
     } catch (error: any) {
-      console.error('❌ S3 upload failed:', error.message);
-      throw new AppError('Failed to upload image to S3 storage', 500);
+      console.error('❌ Cloudinary upload failed:', error.message);
+      throw new AppError('Failed to upload image to Cloudinary', 500);
     }
   }
 
-  /**
-   * Upload buffer directly to S3
-   * @param buffer - Image buffer
-   * @param contentType - MIME type (e.g., 'image/png')
-   * @param fileName - Optional custom filename
-   * @returns Signed URL of uploaded image
-   */
   async uploadBuffer(buffer: Buffer, contentType: string, fileName?: string): Promise<string> {
-    try {
-      if (!fileName) {
-        const timestamp = Date.now();
-        const uuid = uuidv4();
-        const extension = contentType.split('/')[1]?.split(';')[0] || 'png';
-        fileName = `images/${timestamp}-${uuid}.${extension}`;
-      }
-
-      const params = {
-        Bucket: this.bucketName,
-        Key: fileName,
-        Body: buffer,
-        ContentType: contentType,
-        ACL: 'private',
-      };
-
-      const result = await this.s3.upload(params).promise();
-      
-      // Generate signed URL (7 days — max for SigV4)
-      const signedUrl = await this.getSignedUrl(result.Key, SIGNED_URL_EXPIRY);
-
-      return signedUrl;
-    } catch (error: any) {
-      console.error('❌ Failed to upload buffer to S3:', error.message);
-      throw new AppError('Failed to upload image to storage', 500);
+    if (getStorageProvider() === 'cloudinary') {
+      return this.uploadBufferCloudinary(buffer, contentType, fileName);
     }
+    if (!fileName) {
+      const timestamp = Date.now();
+      const uuid = uuidv4();
+      const extension = contentType.split('/')[1]?.split(';')[0] || 'png';
+      fileName = `images/${timestamp}-${uuid}.${extension}`;
+    }
+    const params = {
+      Bucket: this.bucketName,
+      Key: fileName,
+      Body: buffer,
+      ContentType: contentType,
+      ACL: 'private',
+    };
+    const result = await this.s3.upload(params).promise();
+    return this.getSignedUrl(result.Key, 604800);
   }
 
-  /**
-   * Generate a signed URL for accessing S3 files
-   * @param fileKey - S3 object key (e.g., "images/123456-uuid.png")
-   * @param expiresIn - Expiration time in seconds (default: 7 days)
-   * @returns Signed URL
-   */
-  async getSignedUrl(fileKey: string, expiresIn: number = SIGNED_URL_EXPIRY): Promise<string> {
-    try {
-      const params = {
-        Bucket: this.bucketName,
-        Key: fileKey,
-        Expires: expiresIn,
-      };
-
-      const url = await this.s3.getSignedUrlPromise('getObject', params);
-      return url;
-    } catch (error: any) {
-      console.error('❌ Failed to generate signed URL:', error.message);
-      throw new AppError('Failed to generate signed URL', 500);
-    }
+  private uploadBufferCloudinary(
+    buffer: Buffer,
+    contentType: string,
+    fileName?: string
+  ): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const publicId = fileName
+        ? fileName.replace(/\.[^.]+$/, '').replace(/^images\//, '')
+        : `img-${Date.now()}-${uuidv4().slice(0, 8)}`;
+      const upload = cloudinary.uploader.upload_stream(
+        { folder: 'images', public_id: publicId },
+        (err, result) => {
+          if (err) {
+            console.error('❌ Cloudinary upload failed:', err.message);
+            reject(new AppError('Failed to upload image to Cloudinary', 500));
+          } else if (result) {
+            resolve(result.secure_url);
+          } else {
+            reject(new AppError('Cloudinary returned no result', 500));
+          }
+        }
+      );
+      upload.end(buffer);
+    });
   }
 
-  /**
-   * Upload a logo image (private ACL) and return a long-lived signed URL (1 year).
-   * @param buffer - Image buffer
-   * @param contentType - MIME type (e.g., 'image/png')
-   * @param fileName - Optional custom filename
-   * @returns { signedUrl, key } - Signed URL (1 year expiry) and S3 key (for future deletion/refresh)
-   */
-  async uploadLogoPublic(buffer: Buffer, contentType: string, fileName?: string): Promise<{ publicUrl: string; key: string }> {
+  async getSignedUrl(fileKey: string, expiresIn: number = 604800): Promise<string> {
+    if (getStorageProvider() === 'cloudinary') {
+      throw new AppError('getSignedUrl not used for Cloudinary (URLs are public)', 400);
+    }
+    const params = { Bucket: this.bucketName, Key: fileKey, Expires: expiresIn };
+    return this.s3.getSignedUrlPromise('getObject', params);
+  }
+
+  async uploadLogoPublic(
+    buffer: Buffer,
+    contentType: string,
+    fileName?: string
+  ): Promise<{ publicUrl: string; key: string }> {
+    if (getStorageProvider() === 'cloudinary') {
+      return this.uploadLogoCloudinary(buffer, contentType, fileName);
+    }
     const timestamp = Date.now();
     const uuid = uuidv4();
     const extension = contentType.split('/')[1]?.split(';')[0] || 'png';
     const key = fileName || `logos/${timestamp}-${uuid}.${extension}`;
-
     const params = {
       Bucket: this.bucketName,
       Key: key,
@@ -166,79 +172,107 @@ export class StorageService {
       ContentType: contentType,
       ACL: 'private',
     };
-
     await this.s3.upload(params).promise();
-
-    // Generate signed URL (7 days — max for SigV4)
-    const signedUrl = await this.getSignedUrl(key, SIGNED_URL_EXPIRY);
-
+    const signedUrl = await this.getSignedUrl(key, 604800);
     return { publicUrl: signedUrl, key };
   }
 
-  /**
-   * Check if S3 is configured
-   * @returns true if credentials and bucket are configured
-   */
+  private async uploadLogoCloudinary(
+    buffer: Buffer,
+    _contentType: string,
+    fileName?: string
+  ): Promise<{ publicUrl: string; key: string }> {
+    return new Promise((resolve, reject) => {
+      const publicId = fileName
+        ? fileName.replace(/\.[^.]+$/, '').replace(/^logos\//, '')
+        : `logo-${Date.now()}-${uuidv4().slice(0, 8)}`;
+      const upload = cloudinary.uploader.upload_stream(
+        { folder: 'logos', public_id: publicId },
+        (err, result) => {
+          if (err) {
+            console.error('❌ Cloudinary logo upload failed:', err.message);
+            reject(new AppError('Failed to upload logo to Cloudinary', 500));
+          } else if (result) {
+            resolve({ publicUrl: result.secure_url, key: result.public_id });
+          } else {
+            reject(new AppError('Cloudinary returned no result', 500));
+          }
+        }
+      );
+      upload.end(buffer);
+    });
+  }
+
   isS3Configured(): boolean {
     const hasCredentials = !!(
       (process.env.AWS_ACCESS_KEY_ID || process.env.S3_ACCESS_KEY_ID) &&
       (process.env.AWS_SECRET_ACCESS_KEY || process.env.S3_SECRET_ACCESS_KEY)
     );
-    const hasBucket = !!(
-      process.env.AWS_S3_BUCKET_NAME ||
-      process.env.S3_BUCKET_NAME
-    );
+    const hasBucket = !!(process.env.AWS_S3_BUCKET_NAME || process.env.S3_BUCKET_NAME);
     return hasCredentials && hasBucket;
   }
 
-  /**
-   * Delete file from S3
-   * @param fileKey - S3 object key
-   */
-  async deleteFromS3(fileKey: string): Promise<void> {
-    try {
-      const params = {
-        Bucket: this.bucketName,
-        Key: fileKey,
-      };
+  isCloudinaryConfigured(): boolean {
+    return !!(
+      process.env.CLOUDINARY_URL ||
+      (process.env.CLOUDINARY_CLOUD_NAME &&
+        process.env.CLOUDINARY_API_KEY &&
+        process.env.CLOUDINARY_API_SECRET)
+    );
+  }
 
-      await this.s3.deleteObject(params).promise();
+  async deleteFromS3(fileKey: string): Promise<void> {
+    if (getStorageProvider() === 'cloudinary') {
+      return this.deleteFromCloudinary(fileKey);
+    }
+    try {
+      await this.s3.deleteObject({ Bucket: this.bucketName, Key: fileKey }).promise();
     } catch (error: any) {
       console.error('❌ Failed to delete from S3:', error.message);
       throw new AppError(`S3 deletion failed: ${error.message}`, 500);
     }
   }
 
-  /**
-   * Check if a URL is an S3 URL from our bucket
-   * @param url - URL to check
-   * @returns true if it's our S3 URL
-   */
+  private async deleteFromCloudinary(publicId: string): Promise<void> {
+    try {
+      await cloudinary.uploader.destroy(publicId);
+    } catch (error: any) {
+      console.error('❌ Failed to delete from Cloudinary:', error.message);
+      throw new AppError(`Cloudinary deletion failed: ${error.message}`, 500);
+    }
+  }
+
   isS3Url(url: string): boolean {
     return url.includes(this.bucketName) || url.includes('t3.storageapi.dev');
   }
 
-  /**
-   * Extract S3 key from signed URL
-   * @param url - S3 URL (signed or unsigned)
-   * @returns S3 key (e.g., "images/123456-uuid.png")
-   */
+  isCloudinaryUrl(url: string): boolean {
+    return url.includes('res.cloudinary.com');
+  }
+
   extractKeyFromUrl(url: string): string | null {
+    if (this.isCloudinaryUrl(url)) {
+      try {
+        const u = new URL(url);
+        const pathParts = u.pathname.split('/').filter(Boolean);
+        const uploadIdx = pathParts.indexOf('upload');
+        if (uploadIdx >= 0 && uploadIdx < pathParts.length - 1) {
+          const afterUpload = pathParts.slice(uploadIdx + 1);
+          const withoutVersion = afterUpload[0]?.startsWith('v') ? afterUpload.slice(1) : afterUpload;
+          const keyWithExt = withoutVersion.join('/');
+          return keyWithExt ? keyWithExt.replace(/\.[^.]+$/, '') : null;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    }
     try {
       const urlObj = new URL(url);
-      const pathname = urlObj.pathname;
-      
-      // Remove leading slash and bucket name if present
-      // Format: /bucket-name/images/file.png or /images/file.png
-      const parts = pathname.split('/').filter(p => p);
-      
-      // If first part is bucket name, skip it
-      if (parts[0] === this.bucketName) {
-        return parts.slice(1).join('/');
-      }
-      
+      const parts = urlObj.pathname.split('/').filter((p) => p);
+      if (parts[0] === this.bucketName) return parts.slice(1).join('/');
       return parts.join('/');
-    } catch (error) {
+    } catch {
       return null;
     }
   }

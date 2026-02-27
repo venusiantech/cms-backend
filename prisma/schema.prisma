@@ -226,7 +226,19 @@ model Lead {
 }
 
 // ============================================
-// 9️⃣ REGENERATION LOGS TABLE
+// 9️⃣ APP SETTINGS TABLE (e.g. storage provider)
+// ============================================
+model AppSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique // e.g. "storage_provider"
+  value     String   @db.Text // e.g. "railway" | "cloudinary"
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
+
+// ============================================
+// 🔟 REGENERATION LOGS TABLE
 // ============================================
 model RegenerationLog {
   id             String   @id @default(uuid())

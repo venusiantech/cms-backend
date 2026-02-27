@@ -7,6 +7,7 @@ const swaggerJsdoc = require('swagger-jsdoc');
 import { errorHandler } from './middleware/error.middleware';
 import { rateLimiter } from './middleware/rate-limiter.middleware';
 import routes from './routes';
+import { loadStorageProviderFromDb } from './storage/storage-provider.config';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -92,10 +93,17 @@ app.get('/health', (req, res) => {
 // Error handler (must be last)
 app.use(errorHandler);
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Backend running on http://localhost:${PORT}`);
-  console.log(`📚 API Docs available at http://localhost:${PORT}/api/docs`);
-});
+// Load storage provider from DB then start server
+loadStorageProviderFromDb()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`🚀 Backend running on http://localhost:${PORT}`);
+      console.log(`📚 API Docs available at http://localhost:${PORT}/api/docs`);
+    });
+  })
+  .catch((err) => {
+    console.error('Failed to load storage provider:', err);
+    process.exit(1);
+  });
 
 export default app;
