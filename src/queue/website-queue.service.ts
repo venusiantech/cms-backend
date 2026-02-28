@@ -176,6 +176,20 @@ export class WebsiteQueueService {
     };
   }
 
+  /**
+   * Count how many generate-website jobs a specific user has in waiting or active state.
+   * Used to enforce the 3-concurrent-per-user limit in bulk generation.
+   */
+  async getActiveJobCountForUser(userId: string): Promise<number> {
+    const [active, waiting] = await Promise.all([
+      this.websiteQueue.getActive(),
+      this.websiteQueue.getWaiting(),
+    ]);
+    return [...active, ...waiting].filter(
+      (job) => job.name === 'generate-website' && job.data.userId === userId
+    ).length;
+  }
+
   getQueue(): Queue {
     return this.websiteQueue;
   }

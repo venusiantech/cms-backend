@@ -8,6 +8,7 @@ import leadsRoutes from '../leads/leads.routes';
 import aiPromptsRoutes from '../ai-prompts/ai-prompts.routes';
 import publicRoutes from '../public/public.routes';
 import adminRoutes from '../admin/index.routes';
+import bulkUploadRoutes from '../bulk-upload/bulk-upload.routes';
 
 const router = Router();
 
@@ -27,5 +28,6 @@ router.use('/websites', websitesRoutes);
 router.use('/content-blocks', contentRoutes);
 router.use('/leads', leadsRoutes);
 router.use('/ai-prompts', aiPromptsRoutes);
+router.use('/bulk-upload', bulkUploadRoutes);
 
 export default router;
