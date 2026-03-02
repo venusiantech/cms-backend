@@ -8,6 +8,7 @@ import leadsRoutes from './leads/leads.routes';
 import statsRoutes from './stats/stats.routes';
 import storageRoutes from './storage/storage.routes';
 import storageProviderRoutes from './storage-provider.routes';
+import aiProviderRoutes from './ai-provider/ai-provider.routes';
 
 const router = Router();
 
@@ -15,6 +16,7 @@ const router = Router();
 router.use(authenticate, authorize('SUPER_ADMIN'));
 
 router.use('/storage-provider', storageProviderRoutes);
+router.use('/ai-provider', aiProviderRoutes);
 router.use('/stats', statsRoutes);
 router.use('/users', usersRoutes);
 router.use('/ai-prompts', aiPromptsRoutes);

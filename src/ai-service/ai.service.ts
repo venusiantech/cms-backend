@@ -1,16 +1,20 @@
 import axios from 'axios';
 import { AppError } from '../middleware/error.middleware';
 import { StorageService } from '../storage/storage.service';
+import { getAiProvider } from './ai-provider.config';
+import { GeminiService } from './gemini.service';
 
 export class AiService {
   private readonly apiKey: string;
   private readonly apiUrl: string;
   private readonly storageService: StorageService;
+  private readonly geminiService: GeminiService;
 
   constructor() {
     this.apiKey = process.env.AADDYY_API_KEY || '';
     this.apiUrl = process.env.AADDYY_API_URL || 'https://backend.aaddyy.com';
     this.storageService = new StorageService();
+    this.geminiService = new GeminiService();
 
     console.log('\n🤖 === AADDYY AI SERVICE INITIALIZATION ===');
     console.log(`📋 API URL: ${this.apiUrl}`);
@@ -113,11 +117,16 @@ export class AiService {
   }
 
   /**
-   * Generate blog content using research-blog-writer
+   * Generate blog content using the configured AI provider (aaddyy or gemini)
    */
   async generateBlogContent(title: string): Promise<string> {
-    console.log(`\n📝 === GENERATE BLOG ===`);
+    const provider = getAiProvider('blog');
+    console.log(`\n📝 === GENERATE BLOG (provider: ${provider}) ===`);
     console.log(`Topic: ${title}`);
+
+    if (provider === 'gemini') {
+      return this.geminiService.generateBlogContent(title);
+    }
 
     // Validation
     if (!title || typeof title !== 'string' || title.trim().length === 0) {
@@ -362,7 +371,8 @@ export class AiService {
   }
 
   /**
-   * Generate content based on custom prompt from database
+   * Generate content based on custom prompt from database.
+   * Uses the blog AI provider setting (aaddyy or gemini).
    */
   async generateWithPrompt(prompt: string, context?: Record<string, any>): Promise<string> {
     // Replace placeholders in prompt with context values
@@ -377,8 +387,13 @@ export class AiService {
       });
     }
 
-    console.log(`\n🎯 === GENERATE WITH CUSTOM PROMPT ===`);
+    const provider = getAiProvider('blog');
+    console.log(`\n🎯 === GENERATE WITH CUSTOM PROMPT (provider: ${provider}) ===`);
     console.log(`Prompt: ${processedPrompt.substring(0, 50)}...`);
+
+    if (provider === 'gemini') {
+      return this.geminiService.generateBlogContent(processedPrompt);
+    }
 
     if (!this.apiKey) {
       throw new AppError('AADDYY_API_KEY is not configured', 500);
