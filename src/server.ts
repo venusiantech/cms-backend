@@ -85,6 +85,9 @@ app.use(express.urlencoded({ extended: true }));
 // Rate limiting
 app.use(rateLimiter);
 
+// Serve static files from public directory (e.g. logo for emails)
+app.use(express.static('public'));
+
 // API routes
 app.use('/api', routes);
 

@@ -20,6 +20,7 @@
     "noFallthroughCasesInSwitch": false,
     "moduleResolution": "node",
     "resolveJsonModule": true,
+    "jsx": "react",
     "paths": {
       "@/*": ["src/*"]
     }

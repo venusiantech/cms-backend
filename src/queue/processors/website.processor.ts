@@ -2,6 +2,7 @@ import { Job } from 'bull';
 import prisma from '../../config/prisma';
 import { AiService } from '../../ai-service/ai.service';
 import { WebsiteGenerationJob } from '../website-queue.service';
+import { emailService } from '../../email/email.service';
 
 const aiService = new AiService();
 
@@ -124,6 +125,15 @@ export async function processGenerateWebsite(job: Job<WebsiteGenerationJob>) {
     await job.progress(100);
 
     console.log(`\n🎉 Website generation completed for ${domain.domainName}!\n`);
+
+    // Send website-ready notification email (non-blocking)
+    const owner = await prisma.user.findUnique({
+      where: { id: domain.userId },
+      select: { email: true },
+    });
+    if (owner) {
+      emailService.sendWebsiteReady(owner.email, domain.domainName, subdomain);
+    }
 
     return {
       success: true,

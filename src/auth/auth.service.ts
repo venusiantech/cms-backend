@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import prisma from '../config/prisma';
 import { AppError } from '../middleware/error.middleware';
+import { emailService } from '../email/email.service';
 
 interface RegisterDto {
   email: string;
@@ -38,6 +39,9 @@ export class AuthService {
 
     // Generate token
     const token = this.generateToken(user.id, user.email, user.role);
+
+    // Send welcome email (non-blocking — never fails the registration)
+    emailService.sendWelcome(user.email, user.id);
 
     return {
       user: {

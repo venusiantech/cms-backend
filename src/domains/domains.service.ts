@@ -3,6 +3,7 @@ import prisma from '../config/prisma';
 import { AppError } from '../middleware/error.middleware';
 import { AiService } from '../ai-service/ai.service';
 import { CloudflareService } from '../cloudflare-service/cloudflare.service';
+import { emailService } from '../email/email.service';
 
 interface CreateDomainDto {
   domainName: string;
@@ -243,11 +244,22 @@ export class DomainsService {
   }
 
   async delete(id: string, userId: string, userRole: string) {
-    await this.findOne(id, userId, userRole);
+    const domain = await this.findOne(id, userId, userRole);
+
+    // Fetch owner email before deletion (cascade will remove all data)
+    const owner = await prisma.user.findUnique({
+      where: { id: domain.userId },
+      select: { email: true },
+    });
 
     await prisma.domain.delete({
       where: { id },
     });
+
+    // Send domain-deleted notification (non-blocking)
+    if (owner) {
+      emailService.sendDomainDeleted(owner.email, domain.domainName);
+    }
 
     return { message: 'Domain deleted successfully' };
   }
