@@ -41,7 +41,7 @@ export class AuthService {
     const token = this.generateToken(user.id, user.email, user.role);
 
     // Send welcome email (non-blocking — never fails the registration)
-    emailService.sendWelcome(user.email, user.id);
+    emailService.sendWelcome(user.id, user.email);
 
     return {
       user: {

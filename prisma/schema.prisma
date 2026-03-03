@@ -13,17 +13,24 @@ datasource db {
 // 1️⃣ USERS TABLE
 // ============================================
 model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
-  passwordHash  String   @map("password_hash")
-  role          UserRole @default(USER)
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  
+  id                        String   @id @default(uuid())
+  email                     String   @unique
+  passwordHash              String   @map("password_hash")
+  role                      UserRole @default(USER)
+  name                      String?
+  firstName                 String?  @map("first_name")
+  lastName                  String?  @map("last_name")
+  mobileNumber              String?  @map("mobile_number")
+  dateOfBirth               String?  @map("date_of_birth")
+  emailNotificationsEnabled Boolean  @default(true) @map("email_notifications_enabled")
+  notificationEmails        String[] @default([]) @map("notification_emails")
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+
   // Relations
   domains             Domain[]
   regenerationLogs    RegenerationLog[]
-  
+
   @@map("users")
 }
 

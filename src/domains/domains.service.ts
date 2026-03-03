@@ -258,7 +258,7 @@ export class DomainsService {
 
     // Send domain-deleted notification (non-blocking)
     if (owner) {
-      emailService.sendDomainDeleted(owner.email, domain.domainName);
+      emailService.sendDomainDeleted(domain.userId, owner.email, domain.domainName);
     }
 
     return { message: 'Domain deleted successfully' };

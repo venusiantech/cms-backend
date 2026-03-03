@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { render } from '@react-email/render';
+import prisma from '../config/prisma';
 import { WelcomeEmail } from './templates/WelcomeEmail';
 import { WebsiteReadyEmail } from './templates/WebsiteReadyEmail';
 import { DomainDeletedEmail } from './templates/DomainDeletedEmail';
@@ -8,13 +9,46 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.RESEND_FROM_EMAIL || 'app@fastofy.com';
 const LOGO_URL = 'https://fastofy.com/logo/fastofy.png';
 
+/** Fetch notification settings and build the full recipient list for a user. */
+async function getRecipients(
+  userId: string,
+  primaryEmail: string,
+): Promise<{ allowed: boolean; to: string[] }> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { emailNotificationsEnabled: true, notificationEmails: true },
+    });
+
+    if (!user || !user.emailNotificationsEnabled) {
+      return { allowed: false, to: [] };
+    }
+
+    const extras = (user.notificationEmails ?? []).filter(
+      (e) => e && e !== primaryEmail,
+    );
+
+    return { allowed: true, to: [primaryEmail, ...extras] };
+  } catch {
+    // On any DB error, fall back to sending only to the primary address
+    return { allowed: true, to: [primaryEmail] };
+  }
+}
+
 class EmailService {
-  async sendWelcome(to: string, userId: string): Promise<void> {
+  async sendWelcome(userId: string, to: string): Promise<void> {
     try {
+      const { allowed, to: recipients } = await getRecipients(userId, to);
+
+      if (!allowed) {
+        console.log(`ℹ️  [Email] Welcome email skipped (notifications disabled) for ${to}`);
+        return;
+      }
+
       const html = await render(WelcomeEmail({ email: to, logoUrl: LOGO_URL }));
       const { error } = await resend.emails.send({
         from: `Fastofy <${FROM}>`,
-        to: [to],
+        to: recipients,
         subject: 'Welcome to Fastofy!',
         html,
       });
@@ -24,24 +58,32 @@ class EmailService {
         return;
       }
 
-      console.log(`✅ [Email] Welcome email sent to ${to}`);
+      console.log(`✅ [Email] Welcome email sent to ${recipients.join(', ')}`);
     } catch (err: any) {
       console.error(`⚠️  [Email] Exception sending welcome email to ${to}:`, err.message);
     }
   }
 
   async sendWebsiteReady(
+    userId: string,
     to: string,
     domainName: string,
     subdomain: string,
   ): Promise<void> {
     try {
+      const { allowed, to: recipients } = await getRecipients(userId, to);
+
+      if (!allowed) {
+        console.log(`ℹ️  [Email] Website-ready email skipped (notifications disabled) for ${to}`);
+        return;
+      }
+
       const html = await render(
         WebsiteReadyEmail({ email: to, domainName, subdomain, logoUrl: LOGO_URL }),
       );
       const { error } = await resend.emails.send({
         from: `Fastofy <${FROM}>`,
-        to: [to],
+        to: recipients,
         subject: `Your website for ${domainName} is ready!`,
         html,
       });
@@ -54,7 +96,9 @@ class EmailService {
         return;
       }
 
-      console.log(`✅ [Email] Website-ready email sent to ${to} for ${domainName}`);
+      console.log(
+        `✅ [Email] Website-ready email sent to ${recipients.join(', ')} for ${domainName}`,
+      );
     } catch (err: any) {
       console.error(
         `⚠️  [Email] Exception sending website-ready email to ${to}:`,
@@ -64,16 +108,24 @@ class EmailService {
   }
 
   async sendDomainDeleted(
+    userId: string,
     to: string,
     domainName: string,
   ): Promise<void> {
     try {
+      const { allowed, to: recipients } = await getRecipients(userId, to);
+
+      if (!allowed) {
+        console.log(`ℹ️  [Email] Domain-deleted email skipped (notifications disabled) for ${to}`);
+        return;
+      }
+
       const html = await render(
         DomainDeletedEmail({ email: to, domainName, logoUrl: LOGO_URL }),
       );
       const { error } = await resend.emails.send({
         from: `Fastofy <${FROM}>`,
-        to: [to],
+        to: recipients,
         subject: `${domainName} has been removed from Fastofy`,
         html,
       });
@@ -86,7 +138,9 @@ class EmailService {
         return;
       }
 
-      console.log(`✅ [Email] Domain-deleted email sent to ${to} for ${domainName}`);
+      console.log(
+        `✅ [Email] Domain-deleted email sent to ${recipients.join(', ')} for ${domainName}`,
+      );
     } catch (err: any) {
       console.error(
         `⚠️  [Email] Exception sending domain-deleted email to ${to}:`,

@@ -132,7 +132,7 @@ export async function processGenerateWebsite(job: Job<WebsiteGenerationJob>) {
       select: { email: true },
     });
     if (owner) {
-      emailService.sendWebsiteReady(owner.email, domain.domainName, subdomain);
+      emailService.sendWebsiteReady(domain.userId, owner.email, domain.domainName, subdomain);
     }
 
     return {
