@@ -59,6 +59,22 @@ router.post(
 );
 
 /**
+ * GET /api/bulk-upload/inactive-domains
+ * Returns domains uploaded via CSV that are not yet ACTIVE.
+ * SUPER_ADMIN sees all users; regular users see only their own.
+ */
+router.get(
+  '/inactive-domains',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const result = await bulkUploadService.getInactiveUploadedDomains(
+      req.user!.id,
+      req.user!.role
+    );
+    res.json(result);
+  })
+);
+
+/**
  * POST /api/bulk-upload/generate-websites
  * Queue website generation for uploaded domains.
  *

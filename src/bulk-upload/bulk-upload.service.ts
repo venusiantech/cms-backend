@@ -162,6 +162,31 @@ export class BulkUploadService {
   }
 
   /**
+   * Return all uploaded domains (sourceType = UPLOAD) that are not yet ACTIVE.
+   * SUPER_ADMIN sees all users' domains; regular users see only their own.
+   */
+  async getInactiveUploadedDomains(userId: string, userRole: string) {
+    const where =
+      userRole === 'SUPER_ADMIN'
+        ? { sourceType: 'UPLOAD', status: { not: 'ACTIVE' as const } }
+        : { userId, sourceType: 'UPLOAD', status: { not: 'ACTIVE' as const } };
+
+    const domains = await prisma.domain.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        website: { select: { id: true, subdomain: true, templateKey: true } },
+        user: { select: { id: true, email: true } },
+      },
+    });
+
+    return {
+      count: domains.length,
+      domains,
+    };
+  }
+
+  /**
    * Queue website generation for a list of domain IDs.
    * Limits to MAX_CONCURRENT_JOBS_PER_USER active jobs per user at any time.
    * Remaining domains are returned in `pending` for the caller to retry later.
