@@ -37,8 +37,8 @@ router.put(
       .isIn(['title', 'blog', 'image'])
       .withMessage('task must be one of: title, blog, image'),
     body('provider')
-      .isIn(['aaddyy', 'gemini'])
-      .withMessage('provider must be one of: aaddyy, gemini'),
+      .isIn(['aaddyy', 'gemini', 'pexels'])
+      .withMessage('provider must be one of: aaddyy, gemini, pexels'),
   ]),
   asyncHandler(async (req, res) => {
     const { task, provider } = req.body as { task: AiProviderTask; provider: AiProvider };

@@ -1,7 +1,7 @@
 import prisma from '../config/prisma';
 
 export type AiProviderTask = 'title' | 'blog' | 'image';
-export type AiProvider = 'aaddyy' | 'gemini';
+export type AiProvider = 'aaddyy' | 'gemini' | 'pexels';
 export type GeminiModel = 'gemini-2.5-pro' | 'gemini-2.5-flash' | 'gemini-2.5-flash-lite';
 
 export const GEMINI_MODELS: { id: GeminiModel; label: string; bestFor: string; quota: string }[] = [
@@ -10,7 +10,7 @@ export const GEMINI_MODELS: { id: GeminiModel; label: string; bestFor: string; q
   { id: 'gemini-2.5-flash-lite',label: 'Gemini 2.5 Flash-Lite', bestFor: 'Fastest, lightweight tasks',         quota: '~1500 req/day (free tier)' },
 ];
 
-const VALID_PROVIDERS: AiProvider[] = ['aaddyy', 'gemini'];
+const VALID_PROVIDERS: AiProvider[] = ['aaddyy', 'gemini', 'pexels'];
 const VALID_GEMINI_MODELS: GeminiModel[] = GEMINI_MODELS.map((m) => m.id);
 const GEMINI_MODEL_KEY = 'gemini_model';
 

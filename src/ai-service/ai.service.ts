@@ -3,18 +3,21 @@ import { AppError } from '../middleware/error.middleware';
 import { StorageService } from '../storage/storage.service';
 import { getAiProvider } from './ai-provider.config';
 import { GeminiService } from './gemini.service';
+import { PexelsService } from './pexels.service';
 
 export class AiService {
   private readonly apiKey: string;
   private readonly apiUrl: string;
   private readonly storageService: StorageService;
   private readonly geminiService: GeminiService;
+  private readonly pexelsService: PexelsService;
 
   constructor() {
     this.apiKey = process.env.AADDYY_API_KEY || '';
     this.apiUrl = process.env.AADDYY_API_URL || 'https://backend.aaddyy.com';
     this.storageService = new StorageService();
     this.geminiService = new GeminiService();
+    this.pexelsService = new PexelsService();
 
     console.log('\n🤖 === AADDYY AI SERVICE INITIALIZATION ===');
     console.log(`📋 API URL: ${this.apiUrl}`);
@@ -219,11 +222,16 @@ export class AiService {
   }
 
   /**
-   * Generate image using AI
+   * Generate image using the configured AI provider (aaddyy or pexels)
    */
   async generateImage(prompt: string, size: string = '1024x1024'): Promise<string> {
-    console.log(`\n🎨 === GENERATE IMAGE ===`);
+    const provider = getAiProvider('image');
+    console.log(`\n🎨 === GENERATE IMAGE (provider: ${provider}) ===`);
     console.log(`Prompt: ${prompt.substring(0, 100)}...`);
+
+    if (provider === 'pexels') {
+      return this.pexelsService.fetchImage(prompt);
+    }
 
     if (!this.apiKey) {
       throw new AppError('AADDYY_API_KEY is not configured. Cannot generate image.', 500);
