@@ -4,6 +4,7 @@ import { body } from 'express-validator';
 import { validate } from '../middleware/validation.middleware';
 import { asyncHandler, AppError } from '../middleware/error.middleware';
 import { authenticate, AuthRequest } from '../middleware/auth.middleware';
+import { param } from 'express-validator';
 import { BulkUploadService } from './bulk-upload.service';
 
 const router = Router();
@@ -55,6 +56,49 @@ router.post(
     );
 
     res.status(201).json(result);
+  })
+);
+
+/**
+ * PATCH /api/bulk-upload/domains/:id
+ * Edit keywords (selectedMeaning) and/or description (userDescription) of a
+ * CSV-uploaded domain. Domain must not be ACTIVE yet.
+ *
+ * Body (JSON, at least one field required):
+ *   { "selectedMeaning": "updated keywords", "userDescription": "updated description" }
+ */
+router.patch(
+  '/domains/:id',
+  validate([
+    param('id').isUUID().withMessage('Invalid domain ID'),
+    body('selectedMeaning')
+      .optional()
+      .isString()
+      .withMessage('selectedMeaning must be a string'),
+    body('userDescription')
+      .optional()
+      .isString()
+      .withMessage('userDescription must be a string'),
+    body()
+      .custom((body) => {
+        if (body.selectedMeaning === undefined && body.userDescription === undefined) {
+          throw new Error('At least one of selectedMeaning or userDescription is required');
+        }
+        return true;
+      }),
+  ]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const { id } = req.params;
+    const { selectedMeaning, userDescription } = req.body;
+
+    const updated = await bulkUploadService.editUploadedDomain(
+      id,
+      req.user!.id,
+      req.user!.role,
+      { selectedMeaning, userDescription }
+    );
+
+    res.json(updated);
   })
 );
 

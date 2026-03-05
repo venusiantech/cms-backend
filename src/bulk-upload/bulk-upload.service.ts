@@ -162,6 +162,49 @@ export class BulkUploadService {
   }
 
   /**
+   * Edit the keywords / description of an uploaded domain.
+   * Only the owner (or SUPER_ADMIN) can edit. Domain must have sourceType = UPLOAD.
+   * domainName is intentionally not editable (it's the unique key).
+   */
+  async editUploadedDomain(
+    domainId: string,
+    userId: string,
+    userRole: string,
+    data: { selectedMeaning?: string; userDescription?: string }
+  ) {
+    const domain = await prisma.domain.findUnique({ where: { id: domainId } });
+
+    if (!domain) {
+      throw new AppError('Domain not found', 404);
+    }
+
+    if (domain.sourceType !== 'UPLOAD') {
+      throw new AppError('Only CSV-uploaded domains can be edited via this endpoint', 400);
+    }
+
+    if (userRole !== 'SUPER_ADMIN' && domain.userId !== userId) {
+      throw new AppError('Not authorized to edit this domain', 403);
+    }
+
+    if (domain.status === 'ACTIVE') {
+      throw new AppError('Cannot edit an already active domain', 400);
+    }
+
+    const updated = await prisma.domain.update({
+      where: { id: domainId },
+      data: {
+        ...(data.selectedMeaning !== undefined && { selectedMeaning: data.selectedMeaning }),
+        ...(data.userDescription !== undefined && { userDescription: data.userDescription }),
+      },
+      include: {
+        website: { select: { id: true, subdomain: true } },
+      },
+    });
+
+    return updated;
+  }
+
+  /**
    * Return all uploaded domains (sourceType = UPLOAD) that are not yet ACTIVE.
    * SUPER_ADMIN sees all users' domains; regular users see only their own.
    */
