@@ -1,6 +1,9 @@
 import { UserRole } from '@prisma/client';
 import prisma from '../config/prisma';
 import { AppError } from '../middleware/error.middleware';
+import { CloudflareService } from '../cloudflare-service/cloudflare.service';
+
+const cloudflareService = new CloudflareService();
 
 interface UpdateProfileDto {
   name?: string;
@@ -133,7 +136,26 @@ export class UsersService {
       throw new AppError('User not found', 404);
     }
 
+    // Collect all Cloudflare zone IDs before cascade delete removes them
+    const domains = await prisma.domain.findMany({
+      where: { userId: id },
+      select: { cloudflareZoneId: true, domainName: true },
+    });
+
+    // Delete user (cascade removes all domains, websites, content, leads)
     await prisma.user.delete({ where: { id } });
+
+    // Remove all Cloudflare zones non-blocking
+    const zoneIds = domains
+      .filter((d) => d.cloudflareZoneId)
+      .map((d) => d.cloudflareZoneId as string);
+
+    if (zoneIds.length > 0) {
+      console.log(`🗑️  Cleaning up ${zoneIds.length} Cloudflare zone(s) for deleted user ${id}`);
+      Promise.all(zoneIds.map((zoneId) => cloudflareService.deleteZone(zoneId))).catch((err) => {
+        console.error(`⚠️  Cloudflare zone cleanup failed for user ${id}:`, err.message);
+      });
+    }
 
     return { message: 'User deleted successfully' };
   }

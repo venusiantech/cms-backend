@@ -99,6 +99,38 @@ export class CloudflareService {
     }
   }
 
+  async deleteZone(zoneId: string): Promise<boolean> {
+    if (!this.apiToken) {
+      console.log('❌ Cloudflare not configured, skipping zone deletion');
+      return false;
+    }
+
+    try {
+      console.log(`\n🗑️  Deleting Cloudflare DNS zone: ${zoneId}`);
+
+      const response = await axios.delete(`${this.baseUrl}/zones/${zoneId}`, {
+        headers: {
+          Authorization: `Bearer ${this.apiToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.data.success) {
+        console.log(`✅ Cloudflare zone ${zoneId} deleted successfully`);
+        return true;
+      }
+
+      console.error(`❌ Failed to delete Cloudflare zone ${zoneId}:`, response.data.errors);
+      return false;
+    } catch (error: any) {
+      console.error(`❌ Failed to delete Cloudflare zone ${zoneId}:`, error.message);
+      if (error.response?.data) {
+        console.error('   Error details:', error.response.data);
+      }
+      return false;
+    }
+  }
+
   async checkZoneStatus(zoneId: string): Promise<string | null> {
     if (!this.apiToken) {
       return null;

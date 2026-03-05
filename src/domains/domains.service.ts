@@ -244,21 +244,40 @@ export class DomainsService {
   }
 
   async delete(id: string, userId: string, userRole: string) {
-    const domain = await this.findOne(id, userId, userRole);
+    // Verify ownership (throws 403/404 if invalid)
+    await this.findOne(id, userId, userRole);
+
+    // Fetch raw domain to get cloudflareZoneId (stripped by transformDomainResponse)
+    const rawDomain = await prisma.domain.findUnique({
+      where: { id },
+      select: { userId: true, domainName: true, cloudflareZoneId: true },
+    });
+
+    if (!rawDomain) {
+      throw new AppError('Domain not found', 404);
+    }
 
     // Fetch owner email before deletion (cascade will remove all data)
     const owner = await prisma.user.findUnique({
-      where: { id: domain.userId },
+      where: { id: rawDomain.userId },
       select: { email: true },
     });
 
+    // Delete from DB (cascade removes website, pages, sections, content blocks, leads)
     await prisma.domain.delete({
       where: { id },
     });
 
+    // Remove Cloudflare zone (non-blocking — DB is already cleaned up)
+    if (rawDomain.cloudflareZoneId) {
+      this.cloudflareService.deleteZone(rawDomain.cloudflareZoneId).catch((err) => {
+        console.error(`⚠️  Cloudflare zone cleanup failed for ${rawDomain.domainName}:`, err.message);
+      });
+    }
+
     // Send domain-deleted notification (non-blocking)
     if (owner) {
-      emailService.sendDomainDeleted(domain.userId, owner.email, domain.domainName);
+      emailService.sendDomainDeleted(rawDomain.userId, owner.email, rawDomain.domainName);
     }
 
     return { message: 'Domain deleted successfully' };
