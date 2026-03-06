@@ -3,6 +3,7 @@ import prisma from '../config/prisma';
 import { AppError } from '../middleware/error.middleware';
 import { AiService } from '../ai-service/ai.service';
 import { CloudflareService } from '../cloudflare-service/cloudflare.service';
+import { StorageService } from '../storage/storage.service';
 import { emailService } from '../email/email.service';
 
 interface CreateDomainDto {
@@ -18,10 +19,66 @@ interface UpdateDomainDto {
 export class DomainsService {
   private aiService: AiService;
   private cloudflareService: CloudflareService;
+  private storageService: StorageService;
 
   constructor() {
     this.aiService = new AiService();
     this.cloudflareService = new CloudflareService();
+    this.storageService = new StorageService();
+  }
+
+  /** Collect all S3/Cloudinary assets stored for a domain (logo + content block images). */
+  async collectDomainStorageAssets(domainId: string): Promise<string[]> {
+    const assets: string[] = [];
+
+    const domain = await prisma.domain.findUnique({
+      where: { id: domainId },
+      select: {
+        website: {
+          select: {
+            websiteLogoKey: true,
+            pages: {
+              select: {
+                sections: {
+                  select: {
+                    contentBlocks: {
+                      where: { blockType: 'image' },
+                      select: { contentJson: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const website = domain?.website;
+    if (!website) return assets;
+
+    // Logo key (stored S3 key or Cloudinary public_id)
+    if (website.websiteLogoKey) {
+      assets.push(website.websiteLogoKey);
+    }
+
+    // Content block image URLs
+    for (const page of website.pages) {
+      for (const section of page.sections) {
+        for (const block of section.contentBlocks) {
+          try {
+            const content = JSON.parse(block.contentJson);
+            if (content?.url) {
+              assets.push(content.url);
+            }
+          } catch {
+            // malformed JSON — skip
+          }
+        }
+      }
+    }
+
+    return assets;
   }
 
   // Transform domain response to hide cloudflareZoneId and rename cloudflareStatus
@@ -257,6 +314,9 @@ export class DomainsService {
       throw new AppError('Domain not found', 404);
     }
 
+    // Collect storage assets (logo + content images) BEFORE cascade delete
+    const storageAssets = await this.collectDomainStorageAssets(id);
+
     // Fetch owner email before deletion (cascade will remove all data)
     const owner = await prisma.user.findUnique({
       where: { id: rawDomain.userId },
@@ -264,18 +324,33 @@ export class DomainsService {
     });
 
     // Delete from DB (cascade removes website, pages, sections, content blocks, leads)
-    await prisma.domain.delete({
-      where: { id },
-    });
+    await prisma.domain.delete({ where: { id } });
 
-    // Remove Cloudflare zone (non-blocking — DB is already cleaned up)
+    // --- Non-blocking cleanup ---
+
+    // 1. Remove Cloudflare zone
     if (rawDomain.cloudflareZoneId) {
       this.cloudflareService.deleteZone(rawDomain.cloudflareZoneId).catch((err) => {
         console.error(`⚠️  Cloudflare zone cleanup failed for ${rawDomain.domainName}:`, err.message);
       });
     }
 
-    // Send domain-deleted notification (non-blocking)
+    // 2. Remove stored images from S3/Cloudinary
+    if (storageAssets.length > 0) {
+      console.log(`🗑️  Deleting ${storageAssets.length} stored image(s) for domain ${rawDomain.domainName}`);
+      Promise.allSettled(
+        storageAssets.map((asset) => this.storageService.deleteFileByUrl(asset))
+      ).then((results) => {
+        const failed = results.filter((r) => r.status === 'rejected').length;
+        if (failed > 0) {
+          console.error(`⚠️  ${failed} storage asset(s) failed to delete for ${rawDomain.domainName}`);
+        } else {
+          console.log(`✅ All storage assets deleted for ${rawDomain.domainName}`);
+        }
+      });
+    }
+
+    // 3. Send domain-deleted notification
     if (owner) {
       emailService.sendDomainDeleted(rawDomain.userId, owner.email, rawDomain.domainName);
     }

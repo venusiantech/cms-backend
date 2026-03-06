@@ -2,8 +2,10 @@ import { UserRole } from '@prisma/client';
 import prisma from '../config/prisma';
 import { AppError } from '../middleware/error.middleware';
 import { CloudflareService } from '../cloudflare-service/cloudflare.service';
+import { StorageService } from '../storage/storage.service';
 
 const cloudflareService = new CloudflareService();
+const storageService = new StorageService();
 
 interface UpdateProfileDto {
   name?: string;
@@ -136,16 +138,58 @@ export class UsersService {
       throw new AppError('User not found', 404);
     }
 
-    // Collect all Cloudflare zone IDs before cascade delete removes them
+    // Collect Cloudflare zone IDs + all storage assets BEFORE cascade delete
     const domains = await prisma.domain.findMany({
       where: { userId: id },
-      select: { cloudflareZoneId: true, domainName: true },
+      select: {
+        cloudflareZoneId: true,
+        domainName: true,
+        website: {
+          select: {
+            websiteLogoKey: true,
+            pages: {
+              select: {
+                sections: {
+                  select: {
+                    contentBlocks: {
+                      where: { blockType: 'image' },
+                      select: { contentJson: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     });
+
+    // Flatten all storage assets across all domains
+    const storageAssets: string[] = [];
+    for (const domain of domains) {
+      if (domain.website?.websiteLogoKey) {
+        storageAssets.push(domain.website.websiteLogoKey);
+      }
+      for (const page of domain.website?.pages ?? []) {
+        for (const section of page.sections) {
+          for (const block of section.contentBlocks) {
+            try {
+              const content = JSON.parse(block.contentJson);
+              if (content?.url) storageAssets.push(content.url);
+            } catch {
+              // malformed JSON — skip
+            }
+          }
+        }
+      }
+    }
 
     // Delete user (cascade removes all domains, websites, content, leads)
     await prisma.user.delete({ where: { id } });
 
-    // Remove all Cloudflare zones non-blocking
+    // --- Non-blocking cleanup ---
+
+    // 1. Remove all Cloudflare zones
     const zoneIds = domains
       .filter((d) => d.cloudflareZoneId)
       .map((d) => d.cloudflareZoneId as string);
@@ -154,6 +198,21 @@ export class UsersService {
       console.log(`🗑️  Cleaning up ${zoneIds.length} Cloudflare zone(s) for deleted user ${id}`);
       Promise.all(zoneIds.map((zoneId) => cloudflareService.deleteZone(zoneId))).catch((err) => {
         console.error(`⚠️  Cloudflare zone cleanup failed for user ${id}:`, err.message);
+      });
+    }
+
+    // 2. Remove all stored images from S3/Cloudinary
+    if (storageAssets.length > 0) {
+      console.log(`🗑️  Deleting ${storageAssets.length} stored image(s) for deleted user ${id}`);
+      Promise.allSettled(
+        storageAssets.map((asset) => storageService.deleteFileByUrl(asset))
+      ).then((results) => {
+        const failed = results.filter((r) => r.status === 'rejected').length;
+        if (failed > 0) {
+          console.error(`⚠️  ${failed} storage asset(s) failed to delete for user ${id}`);
+        } else {
+          console.log(`✅ All storage assets deleted for user ${id}`);
+        }
       });
     }
 

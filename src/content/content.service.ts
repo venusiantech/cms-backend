@@ -1,6 +1,7 @@
 import prisma from '../config/prisma';
 import { AppError } from '../middleware/error.middleware';
 import { AiService } from '../ai-service/ai.service';
+import { StorageService } from '../storage/storage.service';
 
 interface UpdateContentDto {
   content: any;
@@ -8,9 +9,11 @@ interface UpdateContentDto {
 
 export class ContentService {
   private aiService: AiService;
+  private storageService: StorageService;
 
   constructor() {
     this.aiService = new AiService();
+    this.storageService = new StorageService();
   }
 
   /**
@@ -336,6 +339,19 @@ export class ContentService {
 
     console.log(`🗑️  Deleting section ${sectionId}`);
 
+    // Collect image URLs from blocks BEFORE deleting them from DB
+    const imageUrls: string[] = [];
+    for (const block of section.contentBlocks) {
+      if (block.blockType === 'image') {
+        try {
+          const content = JSON.parse(block.contentJson);
+          if (content?.url) imageUrls.push(content.url);
+        } catch {
+          // malformed JSON — skip
+        }
+      }
+    }
+
     // Delete all content blocks first
     await prisma.contentBlock.deleteMany({
       where: { sectionId },
@@ -347,6 +363,19 @@ export class ContentService {
     });
 
     console.log(`✅ Section deleted successfully`);
+
+    // Remove stored images from S3/Cloudinary (non-blocking)
+    if (imageUrls.length > 0) {
+      console.log(`🗑️  Deleting ${imageUrls.length} image(s) from storage for section ${sectionId}`);
+      Promise.allSettled(
+        imageUrls.map((url) => this.storageService.deleteFileByUrl(url))
+      ).then((results) => {
+        const failed = results.filter((r) => r.status === 'rejected').length;
+        if (failed > 0) {
+          console.error(`⚠️  ${failed} image(s) failed to delete from storage`);
+        }
+      });
+    }
 
     return { success: true, message: 'Blog deleted successfully' };
   }

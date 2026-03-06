@@ -242,6 +242,29 @@ export class StorageService {
     }
   }
 
+  /**
+   * Delete a file given its stored URL or key. Silently swallows errors
+   * so callers can fire-and-forget without crashing the main flow.
+   */
+  async deleteFileByUrl(urlOrKey: string): Promise<void> {
+    try {
+      if (this.isCloudinaryUrl(urlOrKey)) {
+        const publicId = this.extractKeyFromUrl(urlOrKey);
+        if (publicId) await cloudinary.uploader.destroy(publicId);
+        return;
+      }
+      // For S3 URLs, extract the object key; for raw keys, use as-is
+      const key = urlOrKey.startsWith('http')
+        ? this.extractKeyFromUrl(urlOrKey)
+        : urlOrKey;
+      if (key) {
+        await this.s3.deleteObject({ Bucket: this.bucketName, Key: key }).promise();
+      }
+    } catch (err: any) {
+      console.error(`⚠️  [Storage] Failed to delete ${urlOrKey}:`, err.message);
+    }
+  }
+
   isS3Url(url: string): boolean {
     return url.includes(this.bucketName) || url.includes('t3.storageapi.dev');
   }
