@@ -6,6 +6,7 @@ export interface WebsiteGenerationJob {
   userId: string;
   templateKey: string;
   contactFormEnabled: boolean;
+  selectedTitles?: string[]; // if provided, skips AI title generation
 }
 
 export class WebsiteQueueService {

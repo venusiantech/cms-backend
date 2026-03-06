@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { body, param } from 'express-validator';
 import { validate } from '../middleware/validation.middleware';
-import { asyncHandler } from '../middleware/error.middleware';
+import { asyncHandler, AppError } from '../middleware/error.middleware';
 import { authenticate, AuthRequest } from '../middleware/auth.middleware';
 import { WebsitesService } from './websites.service';
 import { WebsiteQueueService } from '../queue/website-queue.service';
+import { AiService } from '../ai-service/ai.service';
+import prisma from '../config/prisma';
 import multer from 'multer';
 
 const upload = multer({
@@ -22,6 +24,7 @@ const upload = multer({
 const router = Router();
 const websitesService = new WebsitesService();
 const queueService = new WebsiteQueueService();
+const aiService = new AiService();
 
 // All routes require authentication
 router.use(authenticate);
@@ -43,6 +46,46 @@ router.get(
   asyncHandler(async (req, res) => {
     const templates = await websitesService.getAvailableTemplates();
     res.json(templates);
+  })
+);
+
+/**
+ * POST /websites/suggest-titles
+ * Returns 5 AI-generated article title suggestions for a domain.
+ * The user picks 3 and passes them to /websites/generate.
+ */
+router.post(
+  '/suggest-titles',
+  validate([
+    body('domainId').isUUID().withMessage('Invalid domain ID'),
+  ]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const { domainId } = req.body;
+
+    const domain = await prisma.domain.findUnique({ where: { id: domainId } });
+    if (!domain) {
+      throw new AppError('Domain not found', 404);
+    }
+
+    // Ownership check — users can only suggest titles for their own domains
+    if (req.user!.role !== 'SUPER_ADMIN' && domain.userId !== req.user!.id) {
+      throw new AppError('Access denied', 403);
+    }
+
+    // Build topic string (same logic as website.processor.ts)
+    const domainTopic = domain.domainName.split('.')[0].replace(/-/g, ' ');
+    let titleTopic: string = domainTopic;
+    if (domain.userDescription) {
+      titleTopic = `${domainTopic} - ${domain.userDescription}`;
+    }
+    if (domain.selectedMeaning) {
+      titleTopic = domain.userDescription
+        ? `${titleTopic} (${domain.selectedMeaning})`
+        : `${domainTopic} - ${domain.selectedMeaning}`;
+    }
+
+    const titles = await aiService.generateTitle(titleTopic, 5);
+    res.json({ titles });
   })
 );
 
@@ -77,6 +120,15 @@ router.post(
     body('domainId').isUUID().withMessage('Invalid domain ID'),
     body('templateKey').isString().notEmpty().withMessage('Template key is required'),
     body('contactFormEnabled').optional().isBoolean(),
+    body('selectedTitles')
+      .optional()
+      .isArray({ max: 3 })
+      .withMessage('selectedTitles must be an array of at most 3 strings'),
+    body('selectedTitles.*')
+      .optional()
+      .isString()
+      .notEmpty()
+      .withMessage('Each selected title must be a non-empty string'),
   ]),
   asyncHandler(async (req: AuthRequest, res) => {
     const jobId = await queueService.addWebsiteGenerationJob({
@@ -84,6 +136,7 @@ router.post(
       userId: req.user!.id,
       templateKey: req.body.templateKey,
       contactFormEnabled: req.body.contactFormEnabled ?? true,
+      selectedTitles: req.body.selectedTitles,
     });
 
     res.json({

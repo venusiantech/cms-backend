@@ -7,7 +7,7 @@ import { emailService } from '../../email/email.service';
 const aiService = new AiService();
 
 export async function processGenerateWebsite(job: Job<WebsiteGenerationJob>) {
-  const { domainId, templateKey, contactFormEnabled } = job.data;
+  const { domainId, templateKey, contactFormEnabled, selectedTitles } = job.data;
 
   console.log(`\n🚀 Starting website generation job ${job.id} for domain ${domainId}`);
   console.log(`   Attempt: ${job.attemptsMade + 1}/${job.opts.attempts || 1}`);
@@ -110,7 +110,8 @@ export async function processGenerateWebsite(job: Job<WebsiteGenerationJob>) {
       domain.domainName,
       job,
       domain.selectedMeaning || undefined,
-      domain.userDescription || undefined
+      domain.userDescription || undefined,
+      selectedTitles,
     );
 
     await job.progress(90);
@@ -320,33 +321,40 @@ async function generatePageContent(
   domainName: string,
   job: Job,
   selectedMeaning?: string,
-  userDescription?: string
+  userDescription?: string,
+  selectedTitles?: string[],
 ) {
   console.log(`\n🎨 Generating content for ${domainName}...`);
 
-  // Step 1: Generate 3 blog titles
-  const domainTopic = domainName.split('.')[0].replace(/-/g, ' ');
+  let titles: string[];
 
-  // Create topic for title generation with all available context
-  let titleTopic: string = domainTopic;
-  
-  // Add user description if provided
-  if (userDescription) {
-    titleTopic = `${domainTopic} - ${userDescription}`;
-    console.log(`📝 Using user description: ${userDescription}`);
-  }
-  
-  // Add selected meaning if provided
-  if (selectedMeaning) {
-    titleTopic = userDescription 
-      ? `${titleTopic} (${selectedMeaning})`
-      : `${domainTopic} - ${selectedMeaning}`;
-    console.log(`📝 Using context: ${selectedMeaning}`);
-  }
+  if (selectedTitles && selectedTitles.length > 0) {
+    // Use user-selected titles directly — skip AI title generation
+    titles = selectedTitles;
+    console.log(`📝 Using ${titles.length} user-selected titles`);
+    titles.forEach((t, i) => console.log(`   ${i + 1}. ${t}`));
+  } else {
+    // Step 1: Generate blog titles via AI
+    const domainTopic = domainName.split('.')[0].replace(/-/g, ' ');
 
-  console.log(`🔤 Generating 3 blog titles...`);
-  console.log(`📝 Topic: ${titleTopic}`);
-  const titles = await aiService.generateTitle(titleTopic, 3);
+    let titleTopic: string = domainTopic;
+
+    if (userDescription) {
+      titleTopic = `${domainTopic} - ${userDescription}`;
+      console.log(`📝 Using user description: ${userDescription}`);
+    }
+
+    if (selectedMeaning) {
+      titleTopic = userDescription
+        ? `${titleTopic} (${selectedMeaning})`
+        : `${domainTopic} - ${selectedMeaning}`;
+      console.log(`📝 Using context: ${selectedMeaning}`);
+    }
+
+    console.log(`🔤 Generating 3 blog titles...`);
+    console.log(`📝 Topic: ${titleTopic}`);
+    titles = await aiService.generateTitle(titleTopic, 3);
+  }
 
   await job.progress(50);
 
