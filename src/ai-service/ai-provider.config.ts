@@ -63,6 +63,7 @@ export async function setAiProvider(task: AiProviderTask, provider: AiProvider):
   console.log(`✅ AI provider for "${task}" set to: ${provider} (saved to DB)`);
 }
 
+
 // ─── Gemini model helpers (all DB-direct, no in-memory cache) ─────────────────
 
 export async function getGeminiModel(): Promise<GeminiModel> {
