@@ -11,6 +11,7 @@ const aiPromptsService = new AiPromptsService();
 // All routes require authentication and SUPER_ADMIN role
 router.use(authenticate, authorize('SUPER_ADMIN'));
 
+
 router.post(
   '/',
   validate([
