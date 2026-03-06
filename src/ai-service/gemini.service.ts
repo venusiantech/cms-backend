@@ -56,7 +56,7 @@ Requirements:
 - Format: clean Markdown only — no HTML, no frontmatter, no preamble
 - Return ONLY the markdown content, nothing else`;
 
-    const modelName = getGeminiModel();
+    const modelName = await getGeminiModel();
     console.log(`   Model: ${modelName}`);
 
     try {

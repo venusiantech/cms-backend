@@ -22,7 +22,7 @@ const router = Router();
 router.get(
   '/',
   asyncHandler(async (_req, res) => {
-    res.json(getAllAiProviders());
+    res.json(await getAllAiProviders());
   })
 );
 
@@ -43,7 +43,7 @@ router.put(
   asyncHandler(async (req, res) => {
     const { task, provider } = req.body as { task: AiProviderTask; provider: AiProvider };
     await setAiProvider(task, provider);
-    res.json(getAllAiProviders());
+    res.json(await getAllAiProviders());
   })
 );
 
@@ -54,7 +54,7 @@ router.put(
 router.get(
   '/gemini-model',
   asyncHandler(async (_req, res) => {
-    res.json({ current: getGeminiModel(), models: GEMINI_MODELS });
+    res.json({ current: await getGeminiModel(), models: GEMINI_MODELS });
   })
 );
 
@@ -72,7 +72,7 @@ router.put(
   asyncHandler(async (req, res) => {
     const { model } = req.body as { model: GeminiModel };
     await setGeminiModel(model);
-    res.json({ current: getGeminiModel(), models: GEMINI_MODELS });
+    res.json({ current: await getGeminiModel(), models: GEMINI_MODELS });
   })
 );
 

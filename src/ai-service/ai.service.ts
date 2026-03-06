@@ -123,7 +123,7 @@ export class AiService {
    * Generate blog content using the configured AI provider (aaddyy or gemini)
    */
   async generateBlogContent(title: string): Promise<string> {
-    const provider = getAiProvider('blog');
+    const provider = await getAiProvider('blog');
     console.log(`\n📝 === GENERATE BLOG (provider: ${provider}) ===`);
     console.log(`Topic: ${title}`);
 
@@ -225,7 +225,7 @@ export class AiService {
    * Generate image using the configured AI provider (aaddyy or pexels)
    */
   async generateImage(prompt: string, size: string = '1024x1024'): Promise<string> {
-    const provider = getAiProvider('image');
+    const provider = await getAiProvider('image');
     console.log(`\n🎨 === GENERATE IMAGE (provider: ${provider}) ===`);
     console.log(`Prompt: ${prompt.substring(0, 100)}...`);
 
@@ -395,7 +395,7 @@ export class AiService {
       });
     }
 
-    const provider = getAiProvider('blog');
+    const provider = await getAiProvider('blog');
     console.log(`\n🎯 === GENERATE WITH CUSTOM PROMPT (provider: ${provider}) ===`);
     console.log(`Prompt: ${processedPrompt.substring(0, 50)}...`);
 

@@ -8,7 +8,6 @@ import { errorHandler } from './middleware/error.middleware';
 import { rateLimiter } from './middleware/rate-limiter.middleware';
 import routes from './routes';
 import { loadStorageProviderFromDb } from './storage/storage-provider.config';
-import { loadAiProvidersFromDb } from './ai-service/ai-provider.config';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -103,7 +102,7 @@ app.get('/health', (req, res) => {
 app.use(errorHandler);
 
 // Load persisted settings from DB then start server
-Promise.all([loadStorageProviderFromDb(), loadAiProvidersFromDb()])
+loadStorageProviderFromDb()
   .then(() => {
     app.listen(PORT, () => {
       console.log(`🚀 Backend running on http://localhost:${PORT}`);
