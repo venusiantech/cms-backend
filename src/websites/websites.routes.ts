@@ -131,6 +131,22 @@ router.post(
       .withMessage('Each selected title must be a non-empty string'),
   ]),
   asyncHandler(async (req: AuthRequest, res) => {
+    // Credit gate — check the user has enough credits before queuing
+    const blogsToGenerate = Array.isArray(req.body.selectedTitles)
+      ? req.body.selectedTitles.length
+      : 3;
+
+    const subscription = await prisma.userSubscription.findUnique({
+      where: { userId: req.user!.id },
+    });
+
+    if (!subscription || subscription.creditsRemaining < blogsToGenerate) {
+      throw new AppError(
+        `Insufficient credits. You need ${blogsToGenerate} credit(s) but have ${subscription?.creditsRemaining ?? 0}. Please upgrade your plan.`,
+        402,
+      );
+    }
+
     const jobId = await queueService.addWebsiteGenerationJob({
       domainId: req.body.domainId,
       userId: req.user!.id,

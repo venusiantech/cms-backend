@@ -78,7 +78,17 @@ app.use(
 // Middleware
 app.use(helmet());
 app.use(morgan('dev'));
-app.use(express.json());
+
+// Capture raw body for Stripe webhook signature verification
+app.use(
+  express.json({
+    verify: (req: any, _res, buf) => {
+      if (req.originalUrl?.includes('/api/stripe/webhook')) {
+        req.rawBody = buf;
+      }
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true }));
 
 // Rate limiting

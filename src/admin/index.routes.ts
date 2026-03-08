@@ -9,6 +9,7 @@ import statsRoutes from './stats/stats.routes';
 import storageRoutes from './storage/storage.routes';
 import storageProviderRoutes from './storage-provider.routes';
 import aiProviderRoutes from './ai-provider/ai-provider.routes';
+import billingRoutes from './billing/billing.routes';
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use('/websites', websitesRoutes);
 router.use('/domains', domainsRoutes);
 router.use('/leads', leadsRoutes);
 router.use('/storage', storageRoutes);
+router.use('/billing', billingRoutes);
 
 export default router;

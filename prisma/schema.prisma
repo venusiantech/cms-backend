@@ -30,6 +30,9 @@ model User {
   // Relations
   domains             Domain[]
   regenerationLogs    RegenerationLog[]
+  subscription        UserSubscription?
+  creditLedger        CreditLedger[]
+  paymentRecords      PaymentRecord[]
 
   @@map("users")
 }
@@ -243,6 +246,107 @@ model AppSetting {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("app_settings")
+}
+
+// ============================================
+// 1️⃣1️⃣ SUBSCRIPTION PLANS TABLE
+// ============================================
+model SubscriptionPlan {
+  id              String   @id @default(uuid())
+  name            String   @unique
+  price           Float
+  creditsPerMonth Int      @map("credits_per_month")
+  maxWebsites     Int      @map("max_websites")
+  stripePriceId   String?  @map("stripe_price_id")
+  isCustom        Boolean  @default(false) @map("is_custom")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  subscriptions UserSubscription[]
+
+  @@map("subscription_plans")
+}
+
+// ============================================
+// 1️⃣2️⃣ USER SUBSCRIPTIONS TABLE
+// ============================================
+model UserSubscription {
+  id                   String             @id @default(uuid())
+  userId               String             @unique @map("user_id")
+  planId               String             @map("plan_id")
+  status               SubscriptionStatus @default(ACTIVE)
+  creditsRemaining     Int                @map("credits_remaining")
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
+  stripeCustomerId     String?            @map("stripe_customer_id")
+  currentPeriodStart   DateTime           @map("current_period_start")
+  currentPeriodEnd     DateTime           @map("current_period_end")
+  cancelAtPeriodEnd    Boolean            @default(false) @map("cancel_at_period_end")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  user User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@index([userId])
+  @@map("user_subscriptions")
+}
+
+// ============================================
+// 1️⃣3️⃣ CREDIT LEDGER TABLE
+// ============================================
+model CreditLedger {
+  id          String     @id @default(uuid())
+  userId      String     @map("user_id")
+  amount      Int
+  type        LedgerType
+  description String     @db.Text
+  domainId    String?    @map("domain_id")
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("credit_ledger")
+}
+
+// ============================================
+// 1️⃣4️⃣ PAYMENT RECORDS TABLE
+// ============================================
+model PaymentRecord {
+  id               String        @id @default(uuid())
+  userId           String        @map("user_id")
+  stripeInvoiceId  String?       @unique @map("stripe_invoice_id")
+  stripeCheckoutId String?       @unique @map("stripe_checkout_id")
+  amount           Float
+  currency         String        @default("usd")
+  status           PaymentStatus
+  planId           String?       @map("plan_id")
+  createdAt        DateTime      @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("payment_records")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PENDING_PAYMENT
+  CANCELLED
+}
+
+enum LedgerType {
+  SUBSCRIPTION_CREDIT
+  BLOG_GENERATION
+  ADMIN_ADJUSTMENT
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
 }
 
 // ============================================

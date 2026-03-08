@@ -7,7 +7,7 @@ import { emailService } from '../../email/email.service';
 const aiService = new AiService();
 
 export async function processGenerateWebsite(job: Job<WebsiteGenerationJob>) {
-  const { domainId, templateKey, contactFormEnabled, selectedTitles } = job.data;
+  const { domainId, userId, templateKey, contactFormEnabled, selectedTitles } = job.data;
 
   console.log(`\n🚀 Starting website generation job ${job.id} for domain ${domainId}`);
   console.log(`   Attempt: ${job.attemptsMade + 1}/${job.opts.attempts || 1}`);
@@ -112,6 +112,8 @@ export async function processGenerateWebsite(job: Job<WebsiteGenerationJob>) {
       domain.selectedMeaning || undefined,
       domain.userDescription || undefined,
       selectedTitles,
+      userId,
+      domainId,
     );
 
     await job.progress(90);
@@ -323,6 +325,8 @@ async function generatePageContent(
   selectedMeaning?: string,
   userDescription?: string,
   selectedTitles?: string[],
+  userId?: string,
+  domainId?: string,
 ) {
   console.log(`\n🎨 Generating content for ${domainName}...`);
 
@@ -407,6 +411,29 @@ async function generatePageContent(
         },
       ],
     });
+
+    // Deduct 1 credit for this blog
+    if (userId) {
+      try {
+        await prisma.$transaction([
+          prisma.userSubscription.update({
+            where: { userId },
+            data: { creditsRemaining: { decrement: 1 } },
+          }),
+          prisma.creditLedger.create({
+            data: {
+              userId,
+              amount: -1,
+              type: 'BLOG_GENERATION',
+              description: `Blog generated: "${title.substring(0, 80)}"`,
+              domainId: domainId ?? null,
+            },
+          }),
+        ]);
+      } catch (creditErr: any) {
+        console.warn(`⚠️  Could not deduct credit for user ${userId}: ${creditErr.message}`);
+      }
+    }
 
     console.log(`✅ Blog ${i + 1} created`);
     await job.progress(progress);

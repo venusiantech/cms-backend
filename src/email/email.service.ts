@@ -4,6 +4,8 @@ import prisma from '../config/prisma';
 import { WelcomeEmail } from './templates/WelcomeEmail';
 import { WebsiteReadyEmail } from './templates/WebsiteReadyEmail';
 import { DomainDeletedEmail } from './templates/DomainDeletedEmail';
+import { SubscriptionAssignedEmail } from './templates/SubscriptionAssignedEmail';
+import { CustomPlanPaymentEmail } from './templates/CustomPlanPaymentEmail';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.RESEND_FROM_EMAIL || 'app@fastofy.com';
@@ -146,6 +148,65 @@ class EmailService {
         `⚠️  [Email] Exception sending domain-deleted email to ${to}:`,
         err.message,
       );
+    }
+  }
+
+  async sendSubscriptionAssigned(
+    userId: string,
+    to: string,
+    planName: string,
+  ): Promise<void> {
+    try {
+      const { allowed, to: recipients } = await getRecipients(userId, to);
+      if (!allowed) return;
+
+      const html = await render(
+        SubscriptionAssignedEmail({ email: to, planName, logoUrl: LOGO_URL }),
+      );
+      const { error } = await resend.emails.send({
+        from: `Fastofy <${FROM}>`,
+        to: recipients,
+        subject: `You've been assigned the ${planName} plan on Fastofy`,
+        html,
+      });
+
+      if (error) {
+        console.error(`⚠️  [Email] Failed to send subscription-assigned email:`, error.message);
+        return;
+      }
+      console.log(`✅ [Email] Subscription-assigned email sent to ${recipients.join(', ')}`);
+    } catch (err: any) {
+      console.error(`⚠️  [Email] Exception sending subscription-assigned email:`, err.message);
+    }
+  }
+
+  async sendCustomPlanPayment(
+    userId: string,
+    to: string,
+    planName: string,
+    paymentUrl: string,
+  ): Promise<void> {
+    try {
+      const { allowed, to: recipients } = await getRecipients(userId, to);
+      if (!allowed) return;
+
+      const html = await render(
+        CustomPlanPaymentEmail({ email: to, planName, paymentUrl, logoUrl: LOGO_URL }),
+      );
+      const { error } = await resend.emails.send({
+        from: `Fastofy <${FROM}>`,
+        to: recipients,
+        subject: `Your custom Fastofy plan is ready — Pay now to activate`,
+        html,
+      });
+
+      if (error) {
+        console.error(`⚠️  [Email] Failed to send custom-plan-payment email:`, error.message);
+        return;
+      }
+      console.log(`✅ [Email] Custom-plan-payment email sent to ${recipients.join(', ')}`);
+    } catch (err: any) {
+      console.error(`⚠️  [Email] Exception sending custom-plan-payment email:`, err.message);
     }
   }
 }

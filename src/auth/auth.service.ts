@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import prisma from '../config/prisma';
 import { AppError } from '../middleware/error.middleware';
 import { emailService } from '../email/email.service';
+import { assignPlanDirectly, getFreePlanId } from '../stripe/stripe.service';
 
 interface RegisterDto {
   email: string;
@@ -39,6 +40,13 @@ export class AuthService {
 
     // Generate token
     const token = this.generateToken(user.id, user.email, user.role);
+
+    // Auto-assign Free plan (non-blocking)
+    getFreePlanId()
+      .then((planId) => assignPlanDirectly(user.id, planId))
+      .catch((err) =>
+        console.error(`⚠️  [Auth] Failed to assign free plan to ${user.id}:`, err.message),
+      );
 
     // Send welcome email (non-blocking — never fails the registration)
     emailService.sendWelcome(user.id, user.email);
