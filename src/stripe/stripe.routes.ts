@@ -15,6 +15,7 @@ import {
   handleInvoicePaymentSucceeded,
   handleInvoicePaymentFailed,
   handleSubscriptionDeleted,
+  handleSubscriptionUpdated,
 } from './stripe-webhook.service';
 
 const router = Router();
@@ -66,6 +67,9 @@ router.post(
           break;
         case 'invoice.payment_failed':
           await handleInvoicePaymentFailed(event.data.object as any);
+          break;
+        case 'customer.subscription.updated':
+          await handleSubscriptionUpdated(event.data.object as any);
           break;
         case 'customer.subscription.deleted':
           await handleSubscriptionDeleted(event.data.object as any);

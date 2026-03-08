@@ -192,6 +192,34 @@ export async function handleInvoicePaymentFailed(
   console.warn(`⚠️  [Webhook] Payment failed for user ${sub.userId}`);
 }
 
+// ─── customer.subscription.updated ───────────────────────────────────────────
+
+export async function handleSubscriptionUpdated(
+  stripeSub: Stripe.Subscription,
+): Promise<void> {
+  const sub = await prisma.userSubscription.findFirst({
+    where: { stripeSubscriptionId: stripeSub.id },
+  });
+
+  if (!sub) return;
+
+  const cancelAtPeriodEnd = stripeSub.cancel_at_period_end ?? false;
+  const periodEndTs = (stripeSub as any).current_period_end;
+  const currentPeriodEnd = periodEndTs ? new Date(periodEndTs * 1000) : undefined;
+
+  await prisma.userSubscription.update({
+    where: { userId: sub.userId },
+    data: {
+      cancelAtPeriodEnd,
+      ...(currentPeriodEnd ? { currentPeriodEnd } : {}),
+    },
+  });
+
+  console.log(
+    `✅ [Webhook] Subscription updated for user ${sub.userId} — cancelAtPeriodEnd: ${cancelAtPeriodEnd}`,
+  );
+}
+
 // ─── customer.subscription.deleted ───────────────────────────────────────────
 
 export async function handleSubscriptionDeleted(
