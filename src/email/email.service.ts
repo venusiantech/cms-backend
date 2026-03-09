@@ -11,6 +11,7 @@ import { SubscriptionRenewalEmail } from './templates/SubscriptionRenewalEmail';
 import { PaymentFailedEmail } from './templates/PaymentFailedEmail';
 import { SubscriptionCancelledEmail } from './templates/SubscriptionCancelledEmail';
 import { SubscriptionCancellingEmail } from './templates/SubscriptionCancellingEmail';
+import { CustomPlanRequestReviewedEmail } from './templates/CustomPlanRequestReviewedEmail';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.RESEND_FROM_EMAIL || 'app@fastofy.com';
@@ -364,6 +365,31 @@ class EmailService {
       console.log(`✅ [Email] Subscription-cancelling email sent to ${recipients.join(', ')}`);
     } catch (err: any) {
       console.error(`⚠️  [Email] Exception sending subscription-cancelling email:`, err.message);
+    }
+  }
+
+  async sendCustomPlanRequestReviewed(userId: string, to: string): Promise<void> {
+    try {
+      const { allowed, to: recipients } = await getRecipients(userId, to);
+      if (!allowed) return;
+
+      const html = await render(
+        CustomPlanRequestReviewedEmail({ email: to, logoUrl: LOGO_URL }),
+      );
+      const { error } = await resend.emails.send({
+        from: `Fastofy <${FROM}>`,
+        to: recipients,
+        subject: 'Your custom plan request has been reviewed',
+        html,
+      });
+
+      if (error) {
+        console.error(`⚠️  [Email] Failed to send custom-plan-reviewed email:`, error.message);
+        return;
+      }
+      console.log(`✅ [Email] Custom-plan-reviewed email sent to ${recipients.join(', ')}`);
+    } catch (err: any) {
+      console.error(`⚠️  [Email] Exception sending custom-plan-reviewed email:`, err.message);
     }
   }
 }

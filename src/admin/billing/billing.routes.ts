@@ -225,6 +225,12 @@ router.patch(
   '/custom-plan-requests/:id',
   validate([param('id').isUUID()]),
   asyncHandler(async (req, res) => {
+    const existing = await prisma.customPlanRequest.findUnique({
+      where: { id: req.params.id },
+      include: { user: { select: { id: true, email: true } } },
+    });
+    if (!existing) throw new AppError('Request not found', 404);
+
     const updated = await prisma.customPlanRequest.update({
       where: { id: req.params.id },
       data: {
@@ -235,6 +241,12 @@ router.patch(
         user: { select: { id: true, email: true, name: true } },
       },
     });
+
+    // Send email when status first changes to REVIEWED
+    if (req.body.status === 'REVIEWED' && existing.status !== 'REVIEWED') {
+      emailService.sendCustomPlanRequestReviewed(existing.user.id, existing.user.email);
+    }
+
     res.json(updated);
   }),
 );
