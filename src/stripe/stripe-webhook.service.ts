@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import prisma from '../config/prisma';
 import { assignPlanDirectly } from './stripe.service';
+import { emailService } from '../email/email.service';
 
 // ─── checkout.session.completed ──────────────────────────────────────────────
 
@@ -83,6 +84,18 @@ export async function handleCheckoutCompleted(
     },
   });
 
+  // Send activation email
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  if (user) {
+    emailService.sendSubscriptionActivated(
+      userId,
+      user.email,
+      plan.name,
+      (session.amount_total ?? 0) / 100,
+      plan.creditsPerMonth,
+    );
+  }
+
   console.log(`✅ [Webhook] Subscription activated for user ${userId} — plan "${plan.name}"`);
 }
 
@@ -151,6 +164,20 @@ export async function handleInvoicePaymentSucceeded(
     },
   });
 
+  // Send renewal email
+  const renewalUser = await prisma.user.findUnique({ where: { id: sub.userId }, select: { email: true } });
+  if (renewalUser) {
+    const nextRenewal = new Date(periodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    emailService.sendSubscriptionRenewal(
+      sub.userId,
+      renewalUser.email,
+      sub.plan.name,
+      (invoice.amount_paid ?? 0) / 100,
+      sub.plan.creditsPerMonth,
+      nextRenewal,
+    );
+  }
+
   console.log(
     `✅ [Webhook] Monthly renewal for user ${sub.userId} — ${sub.plan.creditsPerMonth} credits added`,
   );
@@ -189,6 +216,18 @@ export async function handleInvoicePaymentFailed(
     },
   });
 
+  // Send payment failed email
+  const failedUser = await prisma.user.findUnique({ where: { id: sub.userId }, select: { email: true } });
+  const failedPlan = await prisma.subscriptionPlan.findUnique({ where: { id: sub.planId } });
+  if (failedUser && failedPlan) {
+    emailService.sendPaymentFailed(
+      sub.userId,
+      failedUser.email,
+      failedPlan.name,
+      (invoice.amount_due ?? 0) / 100,
+    );
+  }
+
   console.warn(`⚠️  [Webhook] Payment failed for user ${sub.userId}`);
 }
 
@@ -207,6 +246,8 @@ export async function handleSubscriptionUpdated(
   const periodEndTs = (stripeSub as any).current_period_end;
   const currentPeriodEnd = periodEndTs ? new Date(periodEndTs * 1000) : undefined;
 
+  const wasAlreadyCancelling = sub.cancelAtPeriodEnd;
+
   await prisma.userSubscription.update({
     where: { userId: sub.userId },
     data: {
@@ -214,6 +255,16 @@ export async function handleSubscriptionUpdated(
       ...(currentPeriodEnd ? { currentPeriodEnd } : {}),
     },
   });
+
+  // Send "cancelling" email only when the flag first turns on
+  if (cancelAtPeriodEnd && !wasAlreadyCancelling && currentPeriodEnd) {
+    const cancelUser = await prisma.user.findUnique({ where: { id: sub.userId }, select: { email: true } });
+    const cancelPlan = await prisma.subscriptionPlan.findUnique({ where: { id: sub.planId } });
+    if (cancelUser && cancelPlan) {
+      const endsOn = currentPeriodEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      emailService.sendSubscriptionCancelling(sub.userId, cancelUser.email, cancelPlan.name, endsOn);
+    }
+  }
 
   console.log(
     `✅ [Webhook] Subscription updated for user ${sub.userId} — cancelAtPeriodEnd: ${cancelAtPeriodEnd}`,
@@ -230,6 +281,8 @@ export async function handleSubscriptionDeleted(
   });
 
   if (!sub) return;
+
+  const cancelledPlan = await prisma.subscriptionPlan.findUnique({ where: { id: sub.planId } });
 
   // Revert to Free plan
   try {
@@ -249,6 +302,12 @@ export async function handleSubscriptionDeleted(
       cancelAtPeriodEnd: false,
     },
   });
+
+  // Send cancellation confirmation email
+  const deletedUser = await prisma.user.findUnique({ where: { id: sub.userId }, select: { email: true } });
+  if (deletedUser && cancelledPlan) {
+    emailService.sendSubscriptionCancelled(sub.userId, deletedUser.email, cancelledPlan.name);
+  }
 
   console.log(`✅ [Webhook] Subscription cancelled for user ${sub.userId} — reverted to Free`);
 }

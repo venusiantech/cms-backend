@@ -6,6 +6,11 @@ import { WebsiteReadyEmail } from './templates/WebsiteReadyEmail';
 import { DomainDeletedEmail } from './templates/DomainDeletedEmail';
 import { SubscriptionAssignedEmail } from './templates/SubscriptionAssignedEmail';
 import { CustomPlanPaymentEmail } from './templates/CustomPlanPaymentEmail';
+import { SubscriptionActivatedEmail } from './templates/SubscriptionActivatedEmail';
+import { SubscriptionRenewalEmail } from './templates/SubscriptionRenewalEmail';
+import { PaymentFailedEmail } from './templates/PaymentFailedEmail';
+import { SubscriptionCancelledEmail } from './templates/SubscriptionCancelledEmail';
+import { SubscriptionCancellingEmail } from './templates/SubscriptionCancellingEmail';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.RESEND_FROM_EMAIL || 'app@fastofy.com';
@@ -207,6 +212,158 @@ class EmailService {
       console.log(`✅ [Email] Custom-plan-payment email sent to ${recipients.join(', ')}`);
     } catch (err: any) {
       console.error(`⚠️  [Email] Exception sending custom-plan-payment email:`, err.message);
+    }
+  }
+
+  async sendSubscriptionActivated(
+    userId: string,
+    to: string,
+    planName: string,
+    amountPaid: number,
+    creditsAdded: number,
+  ): Promise<void> {
+    try {
+      const { allowed, to: recipients } = await getRecipients(userId, to);
+      if (!allowed) return;
+
+      const html = await render(
+        SubscriptionActivatedEmail({ email: to, planName, amountPaid, creditsAdded, logoUrl: LOGO_URL }),
+      );
+      const { error } = await resend.emails.send({
+        from: `Fastofy <${FROM}>`,
+        to: recipients,
+        subject: `Your ${planName} subscription is now active!`,
+        html,
+      });
+
+      if (error) {
+        console.error(`⚠️  [Email] Failed to send subscription-activated email:`, error.message);
+        return;
+      }
+      console.log(`✅ [Email] Subscription-activated email sent to ${recipients.join(', ')}`);
+    } catch (err: any) {
+      console.error(`⚠️  [Email] Exception sending subscription-activated email:`, err.message);
+    }
+  }
+
+  async sendSubscriptionRenewal(
+    userId: string,
+    to: string,
+    planName: string,
+    amountPaid: number,
+    creditsAdded: number,
+    nextRenewalDate: string,
+  ): Promise<void> {
+    try {
+      const { allowed, to: recipients } = await getRecipients(userId, to);
+      if (!allowed) return;
+
+      const html = await render(
+        SubscriptionRenewalEmail({ email: to, planName, amountPaid, creditsAdded, nextRenewalDate, logoUrl: LOGO_URL }),
+      );
+      const { error } = await resend.emails.send({
+        from: `Fastofy <${FROM}>`,
+        to: recipients,
+        subject: `${planName} renewed — ${creditsAdded} credits added`,
+        html,
+      });
+
+      if (error) {
+        console.error(`⚠️  [Email] Failed to send subscription-renewal email:`, error.message);
+        return;
+      }
+      console.log(`✅ [Email] Subscription-renewal email sent to ${recipients.join(', ')}`);
+    } catch (err: any) {
+      console.error(`⚠️  [Email] Exception sending subscription-renewal email:`, err.message);
+    }
+  }
+
+  async sendPaymentFailed(
+    userId: string,
+    to: string,
+    planName: string,
+    amountDue: number,
+  ): Promise<void> {
+    try {
+      const { allowed, to: recipients } = await getRecipients(userId, to);
+      if (!allowed) return;
+
+      const html = await render(
+        PaymentFailedEmail({ email: to, planName, amountDue, logoUrl: LOGO_URL }),
+      );
+      const { error } = await resend.emails.send({
+        from: `Fastofy <${FROM}>`,
+        to: recipients,
+        subject: `Action required: Payment failed for your ${planName} plan`,
+        html,
+      });
+
+      if (error) {
+        console.error(`⚠️  [Email] Failed to send payment-failed email:`, error.message);
+        return;
+      }
+      console.log(`✅ [Email] Payment-failed email sent to ${recipients.join(', ')}`);
+    } catch (err: any) {
+      console.error(`⚠️  [Email] Exception sending payment-failed email:`, err.message);
+    }
+  }
+
+  async sendSubscriptionCancelled(
+    userId: string,
+    to: string,
+    planName: string,
+  ): Promise<void> {
+    try {
+      const { allowed, to: recipients } = await getRecipients(userId, to);
+      if (!allowed) return;
+
+      const html = await render(
+        SubscriptionCancelledEmail({ email: to, planName, logoUrl: LOGO_URL }),
+      );
+      const { error } = await resend.emails.send({
+        from: `Fastofy <${FROM}>`,
+        to: recipients,
+        subject: `Your ${planName} subscription has been cancelled`,
+        html,
+      });
+
+      if (error) {
+        console.error(`⚠️  [Email] Failed to send subscription-cancelled email:`, error.message);
+        return;
+      }
+      console.log(`✅ [Email] Subscription-cancelled email sent to ${recipients.join(', ')}`);
+    } catch (err: any) {
+      console.error(`⚠️  [Email] Exception sending subscription-cancelled email:`, err.message);
+    }
+  }
+
+  async sendSubscriptionCancelling(
+    userId: string,
+    to: string,
+    planName: string,
+    endsOn: string,
+  ): Promise<void> {
+    try {
+      const { allowed, to: recipients } = await getRecipients(userId, to);
+      if (!allowed) return;
+
+      const html = await render(
+        SubscriptionCancellingEmail({ email: to, planName, endsOn, logoUrl: LOGO_URL }),
+      );
+      const { error } = await resend.emails.send({
+        from: `Fastofy <${FROM}>`,
+        to: recipients,
+        subject: `Your ${planName} subscription will end on ${endsOn}`,
+        html,
+      });
+
+      if (error) {
+        console.error(`⚠️  [Email] Failed to send subscription-cancelling email:`, error.message);
+        return;
+      }
+      console.log(`✅ [Email] Subscription-cancelling email sent to ${recipients.join(', ')}`);
+    } catch (err: any) {
+      console.error(`⚠️  [Email] Exception sending subscription-cancelling email:`, err.message);
     }
   }
 }
