@@ -17,7 +17,7 @@ export function SubscriptionRenewalEmail({ email, planName, amountPaid, creditsA
   return (
     <Html>
       <Head />
-      <Preview>Your {planName} subscription has renewed — {creditsAdded} credits added</Preview>
+      <Preview>{`Your ${planName} subscription has renewed — ${creditsAdded} credits added`}</Preview>
       <Body style={body}>
         <Container style={container}>
           <Section style={header}>
