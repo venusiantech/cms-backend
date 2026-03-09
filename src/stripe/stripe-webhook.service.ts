@@ -242,32 +242,45 @@ export async function handleSubscriptionUpdated(
 
   if (!sub) return;
 
-  const cancelAtPeriodEnd = stripeSub.cancel_at_period_end ?? false;
-  const periodEndTs = (stripeSub as any).current_period_end;
-  const currentPeriodEnd = periodEndTs ? new Date(periodEndTs * 1000) : undefined;
+  // Stripe can signal a scheduled cancellation in two ways:
+  //   1. cancel_at_period_end = true  (cancel at end of billing cycle)
+  //   2. cancel_at = <unix timestamp>  (cancel at a specific future date)
+  // We treat both as "cancelling" and use the relevant date as the end date.
+  const cancelAtPeriodEnd: boolean = stripeSub.cancel_at_period_end ?? false;
+  const cancelAtTs: number | null = (stripeSub as any).cancel_at ?? null;
+  const periodEndTs: number | null = (stripeSub as any).current_period_end ?? null;
+
+  const isCancelling = cancelAtPeriodEnd || cancelAtTs !== null;
+
+  // Prefer cancel_at (specific date) over current_period_end so the UI shows the right date
+  const endDate = cancelAtTs
+    ? new Date(cancelAtTs * 1000)
+    : periodEndTs
+    ? new Date(periodEndTs * 1000)
+    : undefined;
 
   const wasAlreadyCancelling = sub.cancelAtPeriodEnd;
 
   await prisma.userSubscription.update({
     where: { userId: sub.userId },
     data: {
-      cancelAtPeriodEnd,
-      ...(currentPeriodEnd ? { currentPeriodEnd } : {}),
+      cancelAtPeriodEnd: isCancelling,
+      ...(endDate ? { currentPeriodEnd: endDate } : {}),
     },
   });
 
   // Send "cancelling" email only when the flag first turns on
-  if (cancelAtPeriodEnd && !wasAlreadyCancelling && currentPeriodEnd) {
+  if (isCancelling && !wasAlreadyCancelling && endDate) {
     const cancelUser = await prisma.user.findUnique({ where: { id: sub.userId }, select: { email: true } });
     const cancelPlan = await prisma.subscriptionPlan.findUnique({ where: { id: sub.planId } });
     if (cancelUser && cancelPlan) {
-      const endsOn = currentPeriodEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      const endsOn = endDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       emailService.sendSubscriptionCancelling(sub.userId, cancelUser.email, cancelPlan.name, endsOn);
     }
   }
 
   console.log(
-    `✅ [Webhook] Subscription updated for user ${sub.userId} — cancelAtPeriodEnd: ${cancelAtPeriodEnd}`,
+    `✅ [Webhook] Subscription updated for user ${sub.userId} — isCancelling: ${isCancelling}, endDate: ${endDate?.toISOString() ?? 'unchanged'}`,
   );
 }
 
