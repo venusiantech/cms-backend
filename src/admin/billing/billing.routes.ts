@@ -4,7 +4,7 @@ import { validate } from '../../middleware/validation.middleware';
 import { asyncHandler, AppError } from '../../middleware/error.middleware';
 import { AuthRequest } from '../../middleware/auth.middleware';
 import prisma from '../../config/prisma';
-import { assignPlanDirectly, createCustomPlanPaymentLink } from '../../stripe/stripe.service';
+import { assignPlanDirectly, createCustomPlanPaymentLink, createAdHocCustomPlan } from '../../stripe/stripe.service';
 import { emailService } from '../../email/email.service';
 
 const router = Router();
@@ -152,6 +152,44 @@ router.post(
   }),
 );
 
+// ─── Ad-hoc Custom Plan ───────────────────────────────────────────────────────
+
+/**
+ * Assign a fully custom plan to a user without pre-creating a plan.
+ * Body: { amountUsd, creditsPerMonth, maxWebsites, label? }
+ * Creates a hidden plan record + Stripe payment link, then emails the user.
+ */
+router.post(
+  '/users/:userId/custom-plan',
+  validate([
+    param('userId').isUUID(),
+    body('amountUsd').isFloat({ min: 0.5 }),
+    body('creditsPerMonth').isInt({ min: 1 }),
+    body('maxWebsites').isInt({ min: 1 }),
+    body('label').optional().isString(),
+  ]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const { userId } = req.params;
+    const { amountUsd, creditsPerMonth, maxWebsites, label } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new AppError('User not found', 404);
+
+    const paymentUrl = await createAdHocCustomPlan(
+      userId,
+      user.email,
+      amountUsd,
+      creditsPerMonth,
+      maxWebsites,
+      label,
+    );
+
+    emailService.sendCustomPlanPayment(userId, user.email, label || 'Custom Plan', paymentUrl);
+
+    res.json({ message: 'Payment link created and emailed to user', paymentUrl });
+  }),
+);
+
 // ─── Admin credit ledger overview ─────────────────────────────────────────────
 
 router.get(
@@ -165,6 +203,39 @@ router.get(
       },
     });
     res.json(ledger);
+  }),
+);
+
+// ─── Custom Plan Requests ─────────────────────────────────────────────────────
+
+router.get(
+  '/custom-plan-requests',
+  asyncHandler(async (_req, res) => {
+    const requests = await prisma.customPlanRequest.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        user: { select: { id: true, email: true, name: true } },
+      },
+    });
+    res.json(requests);
+  }),
+);
+
+router.patch(
+  '/custom-plan-requests/:id',
+  validate([param('id').isUUID()]),
+  asyncHandler(async (req, res) => {
+    const updated = await prisma.customPlanRequest.update({
+      where: { id: req.params.id },
+      data: {
+        ...(req.body.status !== undefined && { status: req.body.status }),
+        ...(req.body.adminNote !== undefined && { adminNote: req.body.adminNote }),
+      },
+      include: {
+        user: { select: { id: true, email: true, name: true } },
+      },
+    });
+    res.json(updated);
   }),
 );
 

@@ -33,6 +33,7 @@ model User {
   subscription        UserSubscription?
   creditLedger        CreditLedger[]
   paymentRecords      PaymentRecord[]
+  customPlanRequests  CustomPlanRequest[]
 
   @@map("users")
 }
@@ -347,6 +348,31 @@ enum PaymentStatus {
   PENDING
   SUCCEEDED
   FAILED
+}
+
+// ============================================
+// 1️⃣5️⃣ CUSTOM PLAN REQUESTS TABLE
+// ============================================
+model CustomPlanRequest {
+  id        String            @id @default(uuid())
+  userId    String            @map("user_id")
+  message   String            @db.Text
+  status    CustomPlanReqStatus @default(PENDING)
+  adminNote String?           @map("admin_note") @db.Text
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("custom_plan_requests")
+}
+
+enum CustomPlanReqStatus {
+  PENDING
+  REVIEWED
+  CLOSED
 }
 
 // ============================================

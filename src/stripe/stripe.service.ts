@@ -222,6 +222,78 @@ export async function createCustomPlanPaymentLink(
   return session.url!;
 }
 
+// ─── Ad-hoc Custom Plan (no pre-created plan record required) ────────────────
+
+/**
+ * Creates a one-off payment link for a specific user with custom pricing.
+ * A hidden plan record is auto-created (isActive=false, isCustom=true) so the
+ * webhook can grant the correct number of credits on payment — it won't appear
+ * in any public plan lists.
+ */
+export async function createAdHocCustomPlan(
+  userId: string,
+  email: string,
+  amountUsd: number,
+  creditsPerMonth: number,
+  maxWebsites: number,
+  label?: string,
+): Promise<string> {
+  // Create a hidden plan just to carry credits/sites metadata for the webhook
+  const planName = label?.trim() || `Custom (${email.split('@')[0]})`;
+  const hiddenPlan = await prisma.subscriptionPlan.create({
+    data: {
+      name: planName,
+      price: amountUsd,
+      creditsPerMonth,
+      maxWebsites,
+      isCustom: true,
+      isActive: false, // hidden from all public plan lists
+    },
+  });
+
+  const customerId = await ensureStripeCustomer(userId, email);
+
+  const price = await stripe.prices.create({
+    currency: 'usd',
+    unit_amount: Math.round(amountUsd * 100),
+    recurring: { interval: 'month' },
+    product_data: { name: `Fastofy ${planName}` },
+  });
+
+  const session = await stripe.checkout.sessions.create({
+    customer: customerId,
+    mode: 'subscription',
+    line_items: [{ price: price.id, quantity: 1 }],
+    success_url: SUCCESS_URL,
+    cancel_url: CANCEL_URL,
+    metadata: { userId, planId: hiddenPlan.id },
+    subscription_data: { metadata: { userId, planId: hiddenPlan.id } },
+  });
+
+  // Mark subscription as pending payment
+  const existing = await prisma.userSubscription.findUnique({ where: { userId } });
+  if (existing) {
+    await prisma.userSubscription.update({
+      where: { userId },
+      data: { status: 'PENDING_PAYMENT', stripeCustomerId: customerId },
+    });
+  } else {
+    await prisma.userSubscription.create({
+      data: {
+        userId,
+        planId: hiddenPlan.id,
+        status: 'PENDING_PAYMENT',
+        creditsRemaining: 0,
+        stripeCustomerId: customerId,
+        currentPeriodStart: new Date(),
+        currentPeriodEnd: periodEnd(1),
+      },
+    });
+  }
+
+  return session.url!;
+}
+
 // ─── User Subscription Info ───────────────────────────────────────────────────
 
 export async function getUserSubscription(userId: string) {

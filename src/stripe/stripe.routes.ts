@@ -4,6 +4,7 @@ import { validate } from '../middleware/validation.middleware';
 import { asyncHandler, AppError } from '../middleware/error.middleware';
 import { authenticate, AuthRequest } from '../middleware/auth.middleware';
 import { stripe } from './stripe.client';
+import prisma from '../config/prisma';
 import {
   getActivePlans,
   getUserSubscription,
@@ -115,6 +116,32 @@ router.post(
   asyncHandler(async (req: AuthRequest, res) => {
     const url = await createPortalSession(req.user!.id);
     res.json({ url });
+  }),
+);
+
+// ─── Custom plan request ──────────────────────────────────────────────────────
+router.post(
+  '/custom-plan-request',
+  validate([body('message').isString().notEmpty().withMessage('Message is required')]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const request = await prisma.customPlanRequest.create({
+      data: {
+        userId: req.user!.id,
+        message: req.body.message,
+      },
+    });
+    res.status(201).json({ message: 'Request submitted successfully', id: request.id });
+  }),
+);
+
+router.get(
+  '/custom-plan-request',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const requests = await prisma.customPlanRequest.findMany({
+      where: { userId: req.user!.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(requests);
   }),
 );
 
