@@ -231,7 +231,9 @@ export class BulkUploadService {
 
   /**
    * Queue website generation for a list of domain IDs.
-   * Limits to MAX_CONCURRENT_JOBS_PER_USER active jobs per user at any time.
+   * Enforces:
+   *   1. Subscription maxWebsites cap (skips domains that would exceed the limit)
+   *   2. Per-user concurrency limit (MAX_CONCURRENT_JOBS_PER_USER active jobs)
    * Remaining domains are returned in `pending` for the caller to retry later.
    */
   async bulkQueueWebsiteGeneration(
@@ -246,6 +248,34 @@ export class BulkUploadService {
     const queued: { domainId: string; jobId: string }[] = [];
     const skipped: { domainId: string; reason: string }[] = [];
     const pending: string[] = [];
+
+    // ── Subscription / website cap check (regular users only) ──────────────
+    let websiteSlotsLeft = Infinity;
+    if (userRole !== 'SUPER_ADMIN') {
+      const subscription = await prisma.userSubscription.findUnique({
+        where: { userId },
+        include: { plan: true },
+      });
+
+      if (!subscription) {
+        throw new AppError('No active subscription found. Please subscribe to a plan first.', 403);
+      }
+
+      // Count already-active (generated) websites for this user
+      const activeWebsiteCount = await prisma.website.count({
+        where: { domain: { userId, status: 'ACTIVE' } },
+      });
+
+      const maxWebsites = subscription.plan.maxWebsites;
+      websiteSlotsLeft = Math.max(0, maxWebsites - activeWebsiteCount);
+
+      if (websiteSlotsLeft === 0) {
+        throw new AppError(
+          `You have reached your plan limit of ${maxWebsites} website(s). Upgrade your plan to generate more.`,
+          403
+        );
+      }
+    }
 
     for (const domainId of domainIds) {
       // Verify domain exists and user owns it (SUPER_ADMIN bypasses ownership)
@@ -264,6 +294,12 @@ export class BulkUploadService {
         continue;
       }
 
+      // Enforce subscription website cap
+      if (websiteSlotsLeft <= 0) {
+        skipped.push({ domainId, reason: 'Website limit reached for your plan' });
+        continue;
+      }
+
       // Check per-user concurrency limit
       const activeCount = await this.queueService.getActiveJobCountForUser(userId);
       if (activeCount >= MAX_CONCURRENT_JOBS_PER_USER) {
@@ -279,10 +315,11 @@ export class BulkUploadService {
       });
 
       queued.push({ domainId, jobId });
+      if (websiteSlotsLeft !== Infinity) websiteSlotsLeft--;
     }
 
     console.log(
-      `✅ Bulk generation: ${queued.length} queued, ${skipped.length} skipped, ${pending.length} pending (over limit)`
+      `✅ Bulk generation: ${queued.length} queued, ${skipped.length} skipped, ${pending.length} pending (over concurrency limit)`
     );
 
     return {
