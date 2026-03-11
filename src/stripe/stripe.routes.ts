@@ -98,6 +98,36 @@ router.get(
   }),
 );
 
+// ─── Credit Ledger ────────────────────────────────────────────────────────────
+router.get(
+  '/ledger',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const page = Math.max(1, parseInt((req.query.page as string) ?? '1', 10));
+    const limit = Math.min(50, Math.max(1, parseInt((req.query.limit as string) ?? '20', 10)));
+    const skip = (page - 1) * limit;
+
+    const [entries, total] = await Promise.all([
+      prisma.creditLedger.findMany({
+        where: { userId: req.user!.id },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.creditLedger.count({ where: { userId: req.user!.id } }),
+    ]);
+
+    res.json({
+      entries,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  }),
+);
+
 router.post(
   '/subscribe',
   validate([body('planId').isUUID().withMessage('Invalid plan ID')]),

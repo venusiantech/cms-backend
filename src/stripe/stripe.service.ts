@@ -304,13 +304,7 @@ export async function getUserSubscription(userId: string) {
 
   if (!sub) return null;
 
-  const ledger = await prisma.creditLedger.findMany({
-    where: { userId },
-    orderBy: { createdAt: 'desc' },
-    take: 20,
-  });
-
-  return { ...sub, ledger };
+  return sub;
 }
 
 // ─── Credit Deduction ─────────────────────────────────────────────────────────
