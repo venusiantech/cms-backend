@@ -48,10 +48,10 @@ router.get(
         _count: { id: true },
       }),
 
-      // 3. Websites owned by this user (via their domains)
+      // 3. Active websites only (domain must be ACTIVE — excludes pending CSV uploads)
       prisma.website.count({
         where: {
-          domain: { userId },
+          domain: { userId, status: 'ACTIVE' },
         },
       }),
 
