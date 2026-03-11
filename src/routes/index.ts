@@ -10,6 +10,7 @@ import publicRoutes from '../public/public.routes';
 import adminRoutes from '../admin/index.routes';
 import bulkUploadRoutes from '../bulk-upload/bulk-upload.routes';
 import stripeRoutes from '../stripe/stripe.routes';
+import dashboardRoutes from '../dashboard/dashboard.routes';
 
 const router = Router();
 
@@ -31,5 +32,6 @@ router.use('/leads', leadsRoutes);
 router.use('/ai-prompts', aiPromptsRoutes);
 router.use('/bulk-upload', bulkUploadRoutes);
 router.use('/stripe', stripeRoutes);
+router.use('/dashboard', dashboardRoutes);
 
 export default router;
