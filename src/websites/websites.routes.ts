@@ -60,6 +60,8 @@ router.post(
     body('domainId').isUUID().withMessage('Invalid domain ID'),
   ]),
   asyncHandler(async (req: AuthRequest, res) => {
+    const userId = req.user!.id;
+    const userRole = req.user!.role;
     const { domainId } = req.body;
 
     const domain = await prisma.domain.findUnique({ where: { id: domainId } });
@@ -67,9 +69,32 @@ router.post(
       throw new AppError('Domain not found', 404);
     }
 
-    // Ownership check — users can only suggest titles for their own domains
-    if (req.user!.role !== 'SUPER_ADMIN' && domain.userId !== req.user!.id) {
+    // Ownership check
+    if (userRole !== 'SUPER_ADMIN' && domain.userId !== userId) {
       throw new AppError('Access denied', 403);
+    }
+
+    // Subscription / maxWebsites gate (SUPER_ADMIN bypasses)
+    if (userRole !== 'SUPER_ADMIN') {
+      const subscription = await prisma.userSubscription.findUnique({
+        where: { userId },
+        include: { plan: true },
+      });
+
+      if (!subscription) {
+        throw new AppError('No active subscription found. Please subscribe to a plan first.', 403);
+      }
+
+      const activeWebsiteCount = await prisma.website.count({
+        where: { domain: { userId, status: 'ACTIVE' } },
+      });
+
+      if (activeWebsiteCount >= subscription.plan.maxWebsites) {
+        throw new AppError(
+          `You have reached your plan limit of ${subscription.plan.maxWebsites} website(s). Upgrade your plan to generate more.`,
+          403,
+        );
+      }
     }
 
     // Build topic string (same logic as website.processor.ts)
@@ -131,25 +156,47 @@ router.post(
       .withMessage('Each selected title must be a non-empty string'),
   ]),
   asyncHandler(async (req: AuthRequest, res) => {
-    // Credit gate — check the user has enough credits before queuing
+    const userId = req.user!.id;
+    const userRole = req.user!.role;
+
     const blogsToGenerate = Array.isArray(req.body.selectedTitles)
       ? req.body.selectedTitles.length
       : 3;
 
-    const subscription = await prisma.userSubscription.findUnique({
-      where: { userId: req.user!.id },
-    });
+    if (userRole !== 'SUPER_ADMIN') {
+      const subscription = await prisma.userSubscription.findUnique({
+        where: { userId },
+        include: { plan: true },
+      });
 
-    if (!subscription || subscription.creditsRemaining < blogsToGenerate) {
-      throw new AppError(
-        `Insufficient credits. You need ${blogsToGenerate} credit(s) but have ${subscription?.creditsRemaining ?? 0}. Please upgrade your plan.`,
-        402,
-      );
+      if (!subscription) {
+        throw new AppError('No active subscription found. Please subscribe to a plan first.', 403);
+      }
+
+      // ── Credit gate ──────────────────────────────────────────────────────
+      if (subscription.creditsRemaining < blogsToGenerate) {
+        throw new AppError(
+          `Insufficient credits. You need ${blogsToGenerate} credit(s) but have ${subscription.creditsRemaining}. Please upgrade your plan.`,
+          402,
+        );
+      }
+
+      // ── maxWebsites gate ─────────────────────────────────────────────────
+      const activeWebsiteCount = await prisma.website.count({
+        where: { domain: { userId, status: 'ACTIVE' } },
+      });
+
+      if (activeWebsiteCount >= subscription.plan.maxWebsites) {
+        throw new AppError(
+          `You have reached your plan limit of ${subscription.plan.maxWebsites} website(s). Upgrade your plan to generate more.`,
+          403,
+        );
+      }
     }
 
     const jobId = await queueService.addWebsiteGenerationJob({
       domainId: req.body.domainId,
-      userId: req.user!.id,
+      userId,
       templateKey: req.body.templateKey,
       contactFormEnabled: req.body.contactFormEnabled ?? true,
       selectedTitles: req.body.selectedTitles,
