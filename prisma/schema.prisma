@@ -277,7 +277,7 @@ model UserSubscription {
   userId               String             @unique @map("user_id")
   planId               String             @map("plan_id")
   status               SubscriptionStatus @default(ACTIVE)
-  creditsRemaining     Int                @map("credits_remaining")
+  creditsRemaining     Float              @map("credits_remaining")
   stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
   stripeCustomerId     String?            @map("stripe_customer_id")
   currentPeriodStart   DateTime           @map("current_period_start")
@@ -299,7 +299,7 @@ model UserSubscription {
 model CreditLedger {
   id          String     @id @default(uuid())
   userId      String     @map("user_id")
-  amount      Int
+  amount      Float
   type        LedgerType
   description String     @db.Text
   domainId    String?    @map("domain_id")
@@ -341,6 +341,7 @@ enum SubscriptionStatus {
 enum LedgerType {
   SUBSCRIPTION_CREDIT
   BLOG_GENERATION
+  CONTENT_REGENERATION
   ADMIN_ADJUSTMENT
 }
 

@@ -314,21 +314,34 @@ export async function deductCredit(
   description: string,
   domainId?: string,
 ): Promise<void> {
+  await deductCredits(userId, 1, 'BLOG_GENERATION', description, domainId);
+}
+
+/**
+ * Deduct an arbitrary amount of credits (supports decimals like 0.5).
+ */
+export async function deductCredits(
+  userId: string,
+  amount: number,
+  type: 'BLOG_GENERATION' | 'CONTENT_REGENERATION' | 'ADMIN_ADJUSTMENT',
+  description: string,
+  domainId?: string,
+): Promise<void> {
   const sub = await prisma.userSubscription.findUnique({ where: { userId } });
-  if (!sub || sub.creditsRemaining <= 0) {
+  if (!sub || sub.creditsRemaining < amount) {
     throw new AppError('Insufficient credits', 402);
   }
 
   await prisma.$transaction([
     prisma.userSubscription.update({
       where: { userId },
-      data: { creditsRemaining: { decrement: 1 } },
+      data: { creditsRemaining: { decrement: amount } },
     }),
     prisma.creditLedger.create({
       data: {
         userId,
-        amount: -1,
-        type: 'BLOG_GENERATION',
+        amount: -amount,
+        type,
         description,
         domainId: domainId ?? null,
       },

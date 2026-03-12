@@ -2,6 +2,9 @@ import prisma from '../config/prisma';
 import { AppError } from '../middleware/error.middleware';
 import { AiService } from '../ai-service/ai.service';
 import { StorageService } from '../storage/storage.service';
+import { deductCredits } from '../stripe/stripe.service';
+
+const REGEN_COST = 0.5;
 
 interface UpdateContentDto {
   content: any;
@@ -46,6 +49,12 @@ export class ContentService {
 
     // Verify ownership
     await this.verifyOwnership(block, userId, userRole);
+
+    // Deduct 0.5 credits (SUPER_ADMIN is exempt)
+    if (userRole !== 'SUPER_ADMIN') {
+      const domainId = block.section.page.website.domain.id;
+      await deductCredits(userId, REGEN_COST, 'CONTENT_REGENERATION', 'Content block regeneration', domainId);
+    }
 
     if (!block.aiPromptId) {
       throw new AppError(
@@ -137,6 +146,12 @@ export class ContentService {
     const section = await this.getSectionWithOwnership(sectionId);
     await this.verifySectionOwnership(section, userId, userRole);
 
+    // Deduct 0.5 credits (SUPER_ADMIN is exempt)
+    if (userRole !== 'SUPER_ADMIN') {
+      const domainId = section.page.website.domain.id;
+      await deductCredits(userId, REGEN_COST, 'CONTENT_REGENERATION', 'Blog title regeneration', domainId);
+    }
+
     console.log(`🔄 Regenerating title for section ${sectionId}`);
 
     // Find the title block
@@ -202,6 +217,12 @@ export class ContentService {
   ) {
     const section = await this.getSectionWithOwnership(sectionId);
     await this.verifySectionOwnership(section, userId, userRole);
+
+    // Deduct 0.5 credits (SUPER_ADMIN is exempt)
+    if (userRole !== 'SUPER_ADMIN') {
+      const domainId = section.page.website.domain.id;
+      await deductCredits(userId, REGEN_COST, 'CONTENT_REGENERATION', 'Blog content regeneration', domainId);
+    }
 
     console.log(`🔄 Regenerating content for section ${sectionId}`);
 
@@ -278,6 +299,12 @@ export class ContentService {
   async regenerateImage(sectionId: string, userId: string, userRole: string) {
     const section = await this.getSectionWithOwnership(sectionId);
     await this.verifySectionOwnership(section, userId, userRole);
+
+    // Deduct 0.5 credits (SUPER_ADMIN is exempt)
+    if (userRole !== 'SUPER_ADMIN') {
+      const domainId = section.page.website.domain.id;
+      await deductCredits(userId, REGEN_COST, 'CONTENT_REGENERATION', 'Blog image regeneration', domainId);
+    }
 
     console.log(`🔄 Regenerating image for section ${sectionId}`);
 

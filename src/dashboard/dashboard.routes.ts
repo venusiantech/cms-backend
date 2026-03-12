@@ -31,7 +31,9 @@ router.get(
       websiteCount,
       leadCounts,
       totalBlogsGenerated,
-      creditChartRaw,
+      blogsChartRaw,
+      creditUsageChartRaw,
+      websiteCreationChartRaw,
       leadsChartRaw,
     ] = await Promise.all([
 
@@ -48,11 +50,9 @@ router.get(
         _count: { id: true },
       }),
 
-      // 3. Active websites only (domain must be ACTIVE — excludes pending CSV uploads)
+      // 3. Active websites only (domain must be ACTIVE)
       prisma.website.count({
-        where: {
-          domain: { userId, status: 'ACTIVE' },
-        },
+        where: { domain: { userId, status: 'ACTIVE' } },
       }),
 
       // 4. Lead counts — total + this month
@@ -73,7 +73,7 @@ router.get(
         where: { userId, type: 'BLOG_GENERATION' },
       }),
 
-      // 6. Credits used per day (last 30 days) — raw SQL for DATE_TRUNC grouping
+      // 6. Blogs generated per day — COUNT of BLOG_GENERATION entries
       prisma.$queryRaw<{ day: Date; total: bigint }[]>`
         SELECT
           DATE_TRUNC('day', created_at) AS day,
@@ -86,7 +86,33 @@ router.get(
         ORDER BY day ASC
       `,
 
-      // 7. Leads per day (last 30 days)
+      // 7. Credits spent per day — SUM of ABS(amount) for deduction entries
+      prisma.$queryRaw<{ day: Date; total: bigint }[]>`
+        SELECT
+          DATE_TRUNC('day', created_at) AS day,
+          SUM(ABS(amount)) AS total
+        FROM credit_ledger
+        WHERE user_id = ${userId}
+          AND amount < 0
+          AND created_at >= ${thirtyDaysAgo}
+        GROUP BY day
+        ORDER BY day ASC
+      `,
+
+      // 8. Websites created (activated) per day — when domain status became ACTIVE
+      prisma.$queryRaw<{ day: Date; total: bigint }[]>`
+        SELECT
+          DATE_TRUNC('day', updated_at) AS day,
+          COUNT(*) AS total
+        FROM domains
+        WHERE user_id = ${userId}
+          AND status = 'ACTIVE'
+          AND updated_at >= ${thirtyDaysAgo}
+        GROUP BY day
+        ORDER BY day ASC
+      `,
+
+      // 9. Leads per day (last 30 days)
       prisma.$queryRaw<{ day: Date; total: bigint }[]>`
         SELECT
           DATE_TRUNC('day', l.created_at) AS day,
@@ -158,9 +184,10 @@ router.get(
         leadsThisMonth,
       },
       charts: {
-        creditsUsed: buildDailyChart(creditChartRaw),
-        blogsGenerated: buildDailyChart(creditChartRaw), // same source
-        leads: buildDailyChart(leadsChartRaw),
+        blogsGenerated:   buildDailyChart(blogsChartRaw),
+        creditsUsed:      buildDailyChart(creditUsageChartRaw),
+        websitesCreated:  buildDailyChart(websiteCreationChartRaw),
+        leads:            buildDailyChart(leadsChartRaw),
       },
     });
   }),
